@@ -1,0 +1,178 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+
+@theme inline {
+  /* Font families */
+  --font-headline: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Material Design 3 color tokens */
+  --color-on-primary: #ffffff;
+  --color-surface-tint: #1e6d00;
+  --color-surface-variant: #e2e3de;
+  --color-tertiary: #2f6c00;
+  --color-surface-bright: #f9faf4;
+  --color-on-secondary-container: #377128;
+  --color-on-primary-fixed-variant: #155200;
+  --color-inverse-on-surface: #f0f1ec;
+  --color-primary-fixed: #97fa72;
+  --color-inverse-surface: #2f312e;
+  --color-on-tertiary-fixed: #092100;
+  --color-tertiary-fixed: #a5f871;
+  --color-secondary-fixed: #b2f49a;
+  --color-surface-dim: #dadad5;
+  --color-on-primary-fixed: #042100;
+  --color-on-secondary-fixed: #022100;
+  --color-error: #ba1a1a;
+  --color-on-surface-variant: #404a3a;
+  --color-secondary-container: #b2f49a;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-highest: #e2e3de;
+  --color-primary: #1e6d00;
+  --color-primary-container: #4ba92b;
+  --color-tertiary-fixed-dim: #8adb58;
+  --color-on-error: #ffffff;
+  --color-primary-fixed-dim: #7cdd59;
+  --color-error-container: #ffdad6;
+  --color-on-background: #1a1c19;
+  --color-on-secondary: #ffffff;
+  --color-outline-variant: #bfcab5;
+  --color-surface-container-high: #e8e9e3;
+  --color-surface: #f9faf4;
+  --color-on-primary-container: #0b3600;
+  --color-outline: #707a68;
+  --color-on-error-container: #93000a;
+  --color-on-tertiary-container: #143500;
+  --color-inverse-primary: #7cdd59;
+  --color-on-secondary-fixed-variant: #17520b;
+  --color-secondary-fixed-dim: #97d781;
+  --color-tertiary-container: #5ba72a;
+  --color-on-tertiary-fixed-variant: #225100;
+  --color-on-surface: #1a1c19;
+  --color-on-tertiary: #ffffff;
+  --color-secondary: #316b23;
+  --color-surface-container: #eeeee9;
+  --color-surface-container-low: #f3f4ef;
+  --color-background: #f9faf4;
+}
+
+/* ─── Base ─── */
+html,
+body {
+  overflow-x: hidden;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: #b2f49a;
+  color: #0b3600;
+}
+
+/* ─── Utility classes ─── */
+.glass-nav {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+}
+
+.editorial-shadow {
+  box-shadow:
+    0 1px 2px rgba(26, 28, 25, 0.04),
+    0 8px 24px rgba(26, 28, 25, 0.06),
+    0 24px 48px rgba(26, 28, 25, 0.04);
+}
+
+.editorial-shadow-lg {
+  box-shadow:
+    0 2px 4px rgba(26, 28, 25, 0.04),
+    0 16px 40px rgba(26, 28, 25, 0.08),
+    0 40px 64px rgba(26, 28, 25, 0.04);
+}
+
+.primary-gradient {
+  background: linear-gradient(135deg, #1e6d00 0%, #2d8a10 50%, #4ba92b 100%);
+}
+
+.service-card-border {
+  border-left: 4px solid transparent;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.service-card-border:hover {
+  border-left-color: #1e6d00;
+}
+
+/* ─── Subtle entrance animations ─── */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease both;
+}
+
+.animate-delay-100 {
+  animation-delay: 0.1s;
+}
+
+.animate-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animate-delay-300 {
+  animation-delay: 0.3s;
+}
+
+.animate-delay-400 {
+  animation-delay: 0.4s;
+}
+
+/* ─── Smooth hover lift for cards ─── */
+.hover-lift {
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 12px 32px rgba(26, 28, 25, 0.08),
+    0 4px 12px rgba(26, 28, 25, 0.04);
+}
+
+/* ─── Form focus glow ─── */
+input:focus,
+textarea:focus {
+  box-shadow: 0 2px 0 0 #1e6d00;
+}
+
+/* ─── Divider decoration ─── */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #bfcab5 50%, transparent);
+}
