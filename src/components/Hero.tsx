@@ -28,18 +28,12 @@ export default function Hero() {
 
                     {/* Headline */}
                     <h1 className="animate-fade-up animate-delay-100 font-headline text-[clamp(2.25rem,6vw,5rem)] font-extrabold text-on-surface tracking-[-0.035em] leading-[1.08] mb-6 sm:mb-7">
-                        Electrical <span className="text-primary">&amp;</span> Lighting
-                        <br className="hidden sm:block" />
-                        Solutions for
-                        <br />
-                        California
+                        Energy Efficient Electrical, Lighting, Safety Compliance &amp; Water Heater/Boiler Solutions
                     </h1>
 
                     {/* Subheadline */}
                     <p className="animate-fade-up animate-delay-200 text-lg md:text-xl text-on-surface-variant leading-relaxed mb-10 max-w-xl">
-                        Sustainably driven lighting, electrical, and facilities solutions
-                        for commercial, industrial, and multifamily properties throughout California.
-                        Backed by over 30 years of hands-on experience.
+                        Sustainably focused lighting, electrical, compliance, and energy program solutions for commercial, industrial, and multifamily properties throughout California — backed by over 30 years of hands-on experience.
                     </p>
 
                     {/* CTAs */}
@@ -48,7 +42,7 @@ export default function Hero() {
                             className="primary-gradient text-on-primary px-6 sm:px-8 py-3.5 sm:py-4 rounded-full font-headline font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-[0_4px_24px_rgba(30,109,0,0.2)] hover:shadow-[0_8px_40px_rgba(30,109,0,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
                             href="#request"
                         >
-                            Get a Free Quote
+                            Contact Us
                             <span className="material-symbols-outlined text-xl">arrow_forward</span>
                         </a>
                         <a

@@ -60,7 +60,7 @@ const services = [
                 "Incentive Programs Available",
             ],
         },
-        cta: "Check Availability",
+        cta: "Get Started",
         ctaIcon: "north_east",
     },
 ];
@@ -108,8 +108,7 @@ export default function Services() {
                     </h2>
                     <div className="w-12 h-0.5 bg-primary/30 rounded-full mb-5" />
                     <p className="text-on-surface-variant text-lg leading-relaxed">
-                        Full-service lighting, electrical, safety, and facilities solutions
-                        for commercial, industrial, and multifamily properties throughout California.
+                        Sustainably focused lighting, electrical, compliance, and energy program solutions for commercial, industrial, and multifamily properties throughout California — backed by over 30 years of hands-on
                     </p>
                 </div>
 
@@ -160,7 +159,7 @@ export default function Services() {
                     <div className="px-8 py-7 border-b border-outline-variant/15 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
                             <span className="text-primary font-bold tracking-widest uppercase text-[10px] block mb-1">
-                                Check Availability
+                                Get Started
                             </span>
                             <h3 className="font-headline text-xl md:text-2xl font-bold tracking-tight">
                                 Other Lighting &amp; Energy Saving Incentives
@@ -170,7 +169,7 @@ export default function Services() {
                             href="#request"
                             className="shrink-0 inline-flex items-center gap-2 primary-gradient text-on-primary px-6 py-2.5 rounded-full font-headline font-bold text-sm shadow-[0_4px_16px_rgba(30,109,0,0.2)] hover:shadow-[0_8px_24px_rgba(30,109,0,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
                         >
-                            Check Availability
+                            Contact Us
                             <span className="material-symbols-outlined text-lg">north_east</span>
                         </a>
                     </div>

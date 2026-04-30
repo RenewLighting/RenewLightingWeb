@@ -27,7 +27,7 @@ export default function Footer() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8 sm:gap-10">
                     <div className="col-span-2 md:col-span-1">
                         <div className="text-lg font-bold font-headline mb-4">
-                            Renew
+                            Renew Lighting Services
                         </div>
                         <p className="text-surface/50 text-sm leading-relaxed mb-6 max-w-xs">
                             Commercial lighting & electrical services since 1994.
@@ -43,7 +43,7 @@ export default function Footer() {
                                 { label: "Home", href: "#" },
                                 { label: "Services", href: "#services" },
                                 { label: "About", href: "#about" },
-                                { label: "Contact", href: "#contact" },
+                                { label: "Contact", href: "#request" },
                             ].map((link) => (
                                 <li key={link.label}>
                                     <a

@@ -38,7 +38,7 @@ export default function Navbar() {
                         height={36}
                     />
                     <span className={`text-lg font-extrabold tracking-tight font-headline hidden sm:block transition-colors duration-500 ${scrolled ? "text-on-surface" : "text-on-surface"}`}>
-                        Renew
+                        Renew Lighting Services
                     </span>
                 </Link>
 
@@ -59,7 +59,7 @@ export default function Navbar() {
                         className="hidden sm:inline-flex items-center gap-2 primary-gradient text-on-primary pl-5 pr-4 py-2.5 rounded-full font-headline font-bold text-sm shadow-[0_2px_8px_rgba(30,109,0,0.3)] hover:shadow-[0_4px_16px_rgba(30,109,0,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
                         href="#request"
                     >
-                        Get a Quote
+                        Speak with the experts
                         <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                     </a>
 
@@ -96,7 +96,7 @@ export default function Navbar() {
                         href="#request"
                         onClick={() => setMobileOpen(false)}
                     >
-                        Get a Quote
+                        Contact Us
                     </a>
                 </div>
             </div>
