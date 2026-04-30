@@ -10,8 +10,8 @@ export default function About() {
                         <div className="aspect-[4/5] rounded-2xl overflow-hidden editorial-shadow-lg relative">
                             <Image
                                 className="object-cover"
-                                alt="Professional electrician working on a modern commercial electrical panel"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJfLT-z5hbEOqDxXCCvEo2hia8y16skGEdjyp4ta5UIKP-BgouQvmlvpNtj8zAbQgqgA0pY5_wo4gs5LDDmQt_H_-VZl1KelIBD_JYlBdgAPslXmzn6oss_ajM5jYWwdU-8g6zCeWzi3abZ2dpLaycfq8f8K2uh7ncDYrR_oFYhs4n4INFCRRtB1eK_hZiq5gfiQpZoOe9Kfu8G_S38_u0iLDUuYEU0ywyfn9HrdZa-QvJKgqQuDEydOAz48B63zvczXM6ydg3xxNF"
+                                alt="Technician installing LED lighting in a modern commercial facility"
+                                src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80"
                                 fill
                                 sizes="(max-width: 1024px) 100vw, 50vw"
                             />
