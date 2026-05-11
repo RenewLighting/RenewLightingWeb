@@ -27,7 +27,7 @@ export default function Hero() {
                     </div>
 
                     {/* Headline */}
-                    <h1 className="animate-fade-up animate-delay-100 font-headline text-[clamp(2.25rem,6vw,5rem)] font-extrabold text-on-surface tracking-[-0.035em] leading-[1.08] mb-6 sm:mb-7">
+                    <h1 className="animate-fade-up animate-delay-100 font-headline text-[clamp(1.25rem,3.5vw,2.5rem)] font-extrabold text-on-surface tracking-[-0.035em] leading-[1.12] mb-6 sm:mb-7">
                         Energy Efficient Electrical, Lighting, Safety Compliance &amp; Water Heater/Boiler Solutions
                     </h1>
 
