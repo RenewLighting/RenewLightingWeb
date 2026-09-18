@@ -9,6 +9,7 @@ const navLinks = [
     { href: "#services", label: "Services" },
     { href: "#about", label: "About" },
     { href: "#request", label: "Contact" },
+    { href: "/employee", label: "Employee Login" },
 ];
 
 export default function Navbar() {
