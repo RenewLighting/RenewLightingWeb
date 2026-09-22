@@ -14,12 +14,30 @@ function clearInventoryAccess(response: NextResponse) {
   return response;
 }
 
-export function GET(request: Request) {
+async function revokeWarehouseToken(request: Request) {
+  const origin = process.env.INVENTORY_ORIGIN;
+  const cookie = request.headers.get("cookie");
+  if (!origin || !cookie) return;
+
+  try {
+    await fetch(`${origin}/api/auth/revoke`, {
+      method: "POST",
+      headers: { cookie },
+      cache: "no-store",
+    });
+  } catch {
+    // Clearing the local cookie still prevents reuse in this browser.
+  }
+}
+
+export async function GET(request: Request) {
+  await revokeWarehouseToken(request);
   return clearInventoryAccess(
     NextResponse.redirect(new URL("/api/auth/signout", request.url)),
   );
 }
 
-export function POST() {
+export async function POST(request: Request) {
+  await revokeWarehouseToken(request);
   return clearInventoryAccess(NextResponse.json({ ok: true }));
 }
