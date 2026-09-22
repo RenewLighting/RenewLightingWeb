@@ -9,6 +9,7 @@ const navLinks = [
     { href: "#services", label: "Services" },
     { href: "#about", label: "About" },
     { href: "#request", label: "Contact" },
+    { href: "/portal", label: "Customer Portal" },
     { href: "/employee", label: "Employee Login" },
 ];
 
