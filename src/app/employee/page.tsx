@@ -26,7 +26,8 @@ const applications = [
     name: "Quoting",
     description: "Build estimates and prepare customer proposals.",
     icon: "request_quote",
-    available: false,
+    href: "/quote",
+    available: true,
   },
   {
     name: "Project Dashboard",
