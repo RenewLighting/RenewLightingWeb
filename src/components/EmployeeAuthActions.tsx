@@ -1,6 +1,57 @@
 "use client";
 
+import { useEffect, useState, type ReactNode } from "react";
 import { signIn, signOut } from "next-auth/react";
+
+export function InventoryLaunchLink({ href, className, children }: { href: string; className: string; children: ReactNode }) {
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Returning via the back button restores this page from cache with the overlay still open.
+    const reset = () => setLoading(false);
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
+
+  return (
+    <>
+      <a href={href} className={className} onClick={() => setLoading(true)}>
+        {children}
+      </a>
+      {loading && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface/90 backdrop-blur-sm px-6"
+        >
+          <div className="w-full max-w-sm bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-8 text-center editorial-shadow-lg">
+            <div className="mx-auto mb-6 h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+            <h2 className="font-headline text-xl font-bold text-on-surface mb-2">Opening Warehouse</h2>
+            <p className="text-sm text-on-surface-variant leading-relaxed">
+              Connecting to inventory. If the warehouse has been idle, this can take up to a minute.
+            </p>
+            <button
+              type="button"
+              onClick={() => { window.stop(); setLoading(false); }}
+              className="mt-6 text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Render's free plan sleeps when idle; waking it here hides the cold start.
+export function WarmInventory({ origin }: { origin?: string }) {
+  useEffect(() => {
+    if (!origin) return;
+    fetch(`${origin}/healthz`, { mode: "no-cors", cache: "no-store" }).catch(() => {});
+  }, [origin]);
+  return null;
+}
 
 export function EmployeeSignIn({ callbackUrl }: { callbackUrl: string }) {
   return (
@@ -17,8 +68,11 @@ export function EmployeeSignIn({ callbackUrl }: { callbackUrl: string }) {
 
 export function EmployeeSignOut() {
   async function handleSignOut() {
-    await fetch("/api/inventory-logout", { method: "POST" });
-    await signOut({ callbackUrl: "/" });
+    try {
+      await fetch("/api/inventory-logout", { method: "POST" });
+    } finally {
+      await signOut({ callbackUrl: "/" });
+    }
   }
 
   return (

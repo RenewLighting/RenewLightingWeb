@@ -19,14 +19,19 @@ async function revokeWarehouseToken(request: Request) {
   const cookie = request.headers.get("cookie");
   if (!origin || !cookie) return;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
   try {
     await fetch(`${origin}/api/auth/revoke`, {
       method: "POST",
       headers: { cookie },
       cache: "no-store",
+      signal: controller.signal,
     });
   } catch {
     // Clearing the local cookie still prevents reuse in this browser.
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

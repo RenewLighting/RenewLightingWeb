@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import Image from "next/image";
 import Link from "next/link";
 
-import { EmployeeSignIn, EmployeeSignOut } from "@/components/EmployeeAuthActions";
+import { EmployeeSignIn, EmployeeSignOut, InventoryLaunchLink, WarmInventory } from "@/components/EmployeeAuthActions";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -104,6 +104,7 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
 
   return (
     <main className="min-h-[100dvh] bg-surface">
+      <WarmInventory origin={process.env.INVENTORY_ORIGIN} />
       <header className="border-b border-outline-variant/20 bg-surface-container-lowest">
         <div className="max-w-6xl mx-auto px-6 lg:px-10 h-20 flex items-center justify-between gap-6">
           <Link href="/" className="flex items-center gap-3 min-w-0">
@@ -170,11 +171,21 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
               </>
             );
 
+            const cardClassName = "group relative min-h-64 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-7 editorial-shadow hover-lift flex flex-col justify-between";
+
+            if (application.name === "Inventory") {
+              return (
+                <InventoryLaunchLink key={application.name} href={application.href} className={cardClassName}>
+                  {content}
+                </InventoryLaunchLink>
+              );
+            }
+
             return application.available ? (
               <Link
                 key={application.name}
                 href={application.href}
-                className="group relative min-h-64 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-7 editorial-shadow hover-lift flex flex-col justify-between"
+                className={cardClassName}
               >
                 {content}
               </Link>

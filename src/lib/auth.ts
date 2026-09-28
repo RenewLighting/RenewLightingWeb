@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
 const allowedDomain = "renewlighting.com";
+const sessionDurationSeconds = 60 * 60 * 8;
 
 export const authOptions: NextAuthOptions = {
   pages: {
@@ -31,5 +32,6 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: "jwt",
+    maxAge: sessionDurationSeconds,
   },
 };

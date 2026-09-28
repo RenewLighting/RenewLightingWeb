@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
@@ -10,9 +10,29 @@ function numberValue(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+type SavedQuote = {
+  id: number;
+  project_name: string;
+  status: string;
+  updated_at: string;
+};
+
 export default function QuoteBuilder() {
   const [quote, setQuote] = useState<Quote>(emptyQuote);
+  const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([]);
+  const [selectedQuoteId, setSelectedQuoteId] = useState("");
+  const [storageStatus, setStorageStatus] = useState("");
+  const [saving, setSaving] = useState(false);
   const totals = calculateQuote(quote);
+
+  useEffect(() => {
+    fetch("/api/quotes")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load saved quotes");
+        setSavedQuotes(await response.json());
+      })
+      .catch(() => setStorageStatus("Saved quotes are unavailable until database access is configured."));
+  }, []);
 
   const formulaFields = [
     { key: "taxRate", label: "Product tax", description: "Product subtotal x tax rate is added before markup.", suffix: "%" },
@@ -43,6 +63,56 @@ export default function QuoteBuilder() {
     }));
   }
 
+  async function saveQuote() {
+    setSaving(true);
+    setStorageStatus("");
+    try {
+      const endpoint = selectedQuoteId ? `/api/quotes/${selectedQuoteId}` : "/api/quotes";
+      const response = await fetch(endpoint, {
+        method: selectedQuoteId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quote }),
+      });
+      const saved = await response.json();
+      if (!response.ok) throw new Error(saved.error || "Could not save quote");
+      setSelectedQuoteId(String(saved.id));
+      setStorageStatus("Draft saved");
+      const listResponse = await fetch("/api/quotes");
+      if (listResponse.ok) setSavedQuotes(await listResponse.json());
+    } catch (error) {
+      setStorageStatus(error instanceof Error ? error.message : "Could not save quote");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function loadQuote(id: string) {
+    if (!id) return;
+    const response = await fetch(`/api/quotes/${id}`);
+    const saved = await response.json();
+    if (!response.ok) {
+      setStorageStatus(saved.error || "Could not load quote");
+      return;
+    }
+    setQuote(saved.quote_data);
+    setSelectedQuoteId(id);
+    setStorageStatus("Draft loaded");
+  }
+
+  async function deleteQuote() {
+    if (!selectedQuoteId || !window.confirm("Delete this saved draft?")) return;
+    const response = await fetch(`/api/quotes/${selectedQuoteId}`, { method: "DELETE" });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      setStorageStatus(error.error || "Could not delete quote");
+      return;
+    }
+    setSavedQuotes((current) => current.filter((saved) => String(saved.id) !== selectedQuoteId));
+    setSelectedQuoteId("");
+    setQuote(emptyQuote());
+    setStorageStatus("Draft deleted");
+  }
+
   function download(format: "xlsx" | "pdf") {
     const link = document.createElement("a");
     link.href = `/api/quote/export?format=${format}&data=${encodeURIComponent(JSON.stringify(quote))}`;
@@ -57,11 +127,29 @@ export default function QuoteBuilder() {
             <p className="text-primary font-bold tracking-widest uppercase text-xs">Renew Workspace</p>
             <h1 className="font-headline text-2xl font-extrabold">Quote Builder</h1>
           </div>
-          <Link href="/employee" className="text-sm font-semibold text-on-surface-variant hover:text-primary">Back to portal</Link>
+          <div className="flex items-center gap-3">
+            <select
+              aria-label="Saved quotes"
+              className="max-w-56 rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+              value={selectedQuoteId}
+              onChange={(event) => loadQuote(event.target.value)}
+            >
+              <option value="">Saved drafts</option>
+              {savedQuotes.map((saved) => (
+                <option key={saved.id} value={saved.id}>{saved.project_name || `Draft #${saved.id}`}</option>
+              ))}
+            </select>
+            <button type="button" className="primary-gradient text-on-primary px-4 py-2 rounded-full text-sm font-bold" onClick={saveQuote} disabled={saving}>
+              {saving ? "Saving..." : selectedQuoteId ? "Save draft" : "Save draft"}
+            </button>
+            {selectedQuoteId && <button type="button" className="text-error text-sm font-semibold" onClick={deleteQuote}>Delete</button>}
+            <Link href="/employee" className="text-sm font-semibold text-on-surface-variant hover:text-primary">Back to portal</Link>
+          </div>
         </div>
       </header>
 
       <div className="max-w-[1500px] mx-auto px-6 lg:px-10 py-8">
+        {storageStatus && <p className="mb-4 text-sm text-on-surface-variant" role="status">{storageStatus}</p>}
         <section className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-6 mb-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <label className="text-sm font-semibold">Project name<input className="mt-2 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 font-normal" value={quote.projectName} onChange={(event) => updateQuote("projectName", event.target.value)} placeholder="Project name" /></label>
