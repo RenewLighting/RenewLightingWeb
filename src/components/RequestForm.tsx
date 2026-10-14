@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Icon from "@/components/Icon";
 
 interface FormData {
     name: string;
@@ -84,7 +85,7 @@ export default function RequestForm() {
                         <div className="space-y-6">
                             <div className="flex items-center gap-4 group">
                                 <div className="w-11 h-11 rounded-xl bg-primary/[0.08] flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
-                                    <span className="material-symbols-outlined text-xl">call</span>
+                                    <Icon name="call" className="text-xl" />
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-on-surface text-sm">Call Us Directly</h4>
@@ -95,7 +96,7 @@ export default function RequestForm() {
                             </div>
                             <div className="flex items-center gap-4 group">
                                 <div className="w-11 h-11 rounded-xl bg-primary/[0.08] flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
-                                    <span className="material-symbols-outlined text-xl">mail</span>
+                                    <Icon name="mail" className="text-xl" />
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-on-surface text-sm">Email Operations</h4>
@@ -106,7 +107,7 @@ export default function RequestForm() {
                             </div>
                             <div className="flex items-center gap-4 group">
                                 <div className="w-11 h-11 rounded-xl bg-primary/[0.08] flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
-                                    <span className="material-symbols-outlined text-xl">schedule</span>
+                                    <Icon name="schedule" className="text-xl" />
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-on-surface text-sm">Response Time</h4>
@@ -124,12 +125,7 @@ export default function RequestForm() {
                             {status === "success" ? (
                                 <div className="text-center py-16">
                                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                                        <span
-                                            className="material-symbols-outlined text-primary text-3xl"
-                                            style={{ fontVariationSettings: "'FILL' 1" }}
-                                        >
-                                            check_circle
-                                        </span>
+                                        <Icon name="check_circle" className="text-primary text-3xl" />
                                     </div>
                                     <h3 className="font-headline text-2xl font-bold mb-2">
                                         Request Submitted!
@@ -293,7 +289,7 @@ export default function RequestForm() {
 
                                     {status === "error" && (
                                         <div className="bg-error-container text-on-error-container p-4 rounded-xl text-sm font-medium flex items-center gap-3">
-                                            <span className="material-symbols-outlined text-lg">error</span>
+                                            <Icon name="error" className="text-lg" />
                                             {errorMessage}
                                         </div>
                                     )}
@@ -308,7 +304,7 @@ export default function RequestForm() {
                                         ) : (
                                             <>
                                                 Submit Consultation Request
-                                                <span className="material-symbols-outlined text-lg">send</span>
+                                                <Icon name="send" className="text-lg" />
                                             </>
                                         )}
                                     </button>

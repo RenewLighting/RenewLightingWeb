@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import Image from "next/image";
 import Link from "next/link";
 
+import Icon from "@/components/Icon";
 import { EmployeeSignIn, EmployeeSignOut, InventoryLaunchLink, WarmInventory } from "@/components/EmployeeAuthActions";
 import { authOptions } from "@/lib/auth";
 
@@ -94,7 +95,7 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
 
           <EmployeeSignIn callbackUrl={safeCallbackUrl} />
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-on-surface-variant">
-            <span className="material-symbols-outlined text-base text-primary">verified_user</span>
+            <Icon name="verified_user" className="text-base text-primary" />
             Authorized employees only
           </div>
         </div>
@@ -141,12 +142,7 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
             const content = (
               <>
                 <div className="w-12 h-12 rounded-xl bg-primary/[0.08] text-primary flex items-center justify-center mb-8">
-                  <span
-                    className="material-symbols-outlined text-2xl"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    {application.icon}
-                  </span>
+                  <Icon name={application.icon} className="text-2xl" />
                 </div>
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-2">
@@ -164,9 +160,7 @@ export default async function EmployeePage({ searchParams }: EmployeePageProps) 
                   </p>
                 </div>
                 {application.available && (
-                  <span className="material-symbols-outlined text-primary absolute top-7 right-7 transition-transform group-hover:translate-x-1">
-                    arrow_forward
-                  </span>
+                  <Icon name="arrow_forward" className="text-primary absolute top-7 right-7 transition-transform group-hover:translate-x-1" />
                 )}
               </>
             );

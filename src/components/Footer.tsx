@@ -1,3 +1,5 @@
+import Icon from "@/components/Icon";
+
 export default function Footer() {
     return (
         <footer className="bg-on-surface text-surface w-full">
@@ -17,7 +19,7 @@ export default function Footer() {
                         className="shrink-0 bg-primary text-on-primary px-8 py-3.5 rounded-full font-headline font-bold text-sm hover:bg-primary-container transition-colors flex items-center gap-2"
                     >
                         Get Started
-                        <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                        <Icon name="arrow_forward" className="text-lg" />
                     </a>
                 </div>
             </div>

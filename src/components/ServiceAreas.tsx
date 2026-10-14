@@ -1,3 +1,5 @@
+import Icon from "@/components/Icon";
+
 const areas = [
     {
         name: "Greater Los Angeles",
@@ -19,7 +21,7 @@ const areas = [
         description: "North County, Palm Springs, Cathedral City, Indio.",
         icon: "wb_sunny",
     },
-];
+] as const;
 
 export default function ServiceAreas() {
     return (
@@ -40,7 +42,7 @@ export default function ServiceAreas() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2.5 text-primary font-semibold text-sm bg-primary/[0.06] px-4 py-2 rounded-full">
-                        <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                        <Icon name="verified" className="text-lg" />
                         Licensed State Contractor
                     </div>
                 </div>
@@ -52,9 +54,7 @@ export default function ServiceAreas() {
                             className="group bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/10 hover-lift"
                         >
                             <div className="w-10 h-10 rounded-xl bg-primary/[0.07] flex items-center justify-center text-primary mb-4 group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
-                                <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                                    {area.icon}
-                                </span>
+                                <Icon name={area.icon} className="text-xl" />
                             </div>
                             <h4 className="font-headline font-bold text-on-surface mb-2 text-[15px]">
                                 {area.name}

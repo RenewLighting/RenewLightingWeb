@@ -1,3 +1,5 @@
+import Icon from "@/components/Icon";
+
 const services = [
     {
         num: "01",
@@ -63,7 +65,7 @@ const services = [
         cta: "Get Started",
         ctaIcon: "north_east",
     },
-];
+] as const;
 
 function ServiceDetails({ details }: { details: (typeof services)[number]["details"] }) {
     switch (details.type) {
@@ -122,12 +124,7 @@ export default function Services() {
                             <div>
                                 <div className="flex justify-between items-start mb-8">
                                     <div className="w-14 h-14 rounded-2xl bg-primary/[0.08] flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-on-primary transition-all duration-400">
-                                        <span
-                                            className="material-symbols-outlined text-2xl"
-                                            style={{ fontVariationSettings: "'FILL' 1" }}
-                                        >
-                                            {service.icon}
-                                        </span>
+                                        <Icon name={service.icon} className="text-2xl" />
                                     </div>
                                     <span className="text-5xl font-headline font-black text-primary/[0.06] group-hover:text-primary/[0.12] transition-colors select-none">
                                         {service.num}
@@ -146,9 +143,10 @@ export default function Services() {
                                 href="#request"
                             >
                                 {service.cta}
-                                <span className="material-symbols-outlined text-lg transition-transform duration-200 group-hover/btn:translate-x-1">
-                                    {service.ctaIcon}
-                                </span>
+                                <Icon
+                                    name={service.ctaIcon}
+                                    className="text-lg transition-transform duration-200 group-hover/btn:translate-x-1"
+                                />
                             </a>
                         </div>
                     ))}
@@ -170,24 +168,19 @@ export default function Services() {
                             className="shrink-0 inline-flex items-center gap-2 primary-gradient text-on-primary px-6 py-2.5 rounded-full font-headline font-bold text-sm shadow-[0_4px_16px_rgba(30,109,0,0.2)] hover:shadow-[0_8px_24px_rgba(30,109,0,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
                         >
                             Contact Us
-                            <span className="material-symbols-outlined text-lg">north_east</span>
+                            <Icon name="north_east" className="text-lg" />
                         </a>
                     </div>
                     <div className="px-8 py-7 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                        {[
+                        {([
                             { icon: "lightbulb", label: "LED Upgrades" },
                             { icon: "tune", label: "Lighting Controls" },
                             { icon: "thermostat", label: "Smart Thermostats" },
                             { icon: "hot_tub", label: "Pool/Spa Heater & Timer" },
                             { icon: "more_horiz", label: "...and more" },
-                        ].map((item) => (
+                        ] as const).map((item) => (
                             <div key={item.label} className="flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-surface-container-low/50 hover-lift">
-                                <span
-                                    className="material-symbols-outlined text-primary text-2xl"
-                                    style={{ fontVariationSettings: "'FILL' 1" }}
-                                >
-                                    {item.icon}
-                                </span>
+                                <Icon name={item.icon} className="text-primary text-2xl" />
                                 <span className="text-xs font-semibold text-on-surface-variant">{item.label}</span>
                             </div>
                         ))}

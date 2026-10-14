@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Manrope, Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import OrganizationJsonLd from "@/components/OrganizationJsonLd";
+import { siteDescription, siteName, siteUrl } from "@/lib/site";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -13,10 +15,40 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const title = "Renew Lighting Services | Electrical & Lighting Excellence";
+
 export const metadata: Metadata = {
-  title: "Renew Lighting Services | Electrical & Lighting Excellence",
-  description:
-    "Serving Commercial, Industrial, and Multifamily Properties across California. Over 30 years of trusted experience in electrical and lighting solutions.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: title,
+    template: `%s | ${siteName}`,
+  },
+  description: siteDescription,
+  keywords: [
+    "commercial lighting contractor",
+    "commercial electrical contractor California",
+    "industrial lighting services",
+    "multifamily property electrical",
+    "LED retrofit contractor",
+    "Renew Lighting Services",
+  ],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: siteUrl,
+    siteName,
+    title,
+    description: siteDescription,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description: siteDescription,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
@@ -31,10 +63,7 @@ export default function RootLayout({
     >
       <head>
         <link rel="icon" href="/logo-fixed-closer-transparent.svg" type="image/svg+xml" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-          rel="stylesheet"
-        />
+        <OrganizationJsonLd />
       </head>
       <body className="bg-surface font-body text-on-surface">
         {children}

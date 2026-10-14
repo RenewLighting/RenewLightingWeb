@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import Icon from "@/components/Icon";
 
 const navLinks = [
     { href: "#", label: "Home" },
@@ -38,6 +39,8 @@ export default function Navbar() {
                         src="/logo-fixed-closer-transparent.svg"
                         width={36}
                         height={36}
+                        loading="eager"
+                        fetchPriority="high"
                     />
                     <span className={`text-lg font-extrabold tracking-tight font-headline hidden sm:block transition-colors duration-500 ${scrolled ? "text-on-surface" : "text-on-surface"}`}>
                         Renew Lighting Services
@@ -62,7 +65,7 @@ export default function Navbar() {
                         href="#request"
                     >
                         Speak with the experts
-                        <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                        <Icon name="arrow_forward" className="text-[18px]" />
                     </a>
 
                     <button
@@ -70,9 +73,10 @@ export default function Navbar() {
                         onClick={() => setMobileOpen(!mobileOpen)}
                         aria-label="Toggle menu"
                     >
-                        <span className={`material-symbols-outlined text-xl transition-colors duration-500 ${scrolled ? "text-on-surface" : "text-on-surface"}`}>
-                            {mobileOpen ? "close" : "menu"}
-                        </span>
+                        <Icon
+                            name={mobileOpen ? "close" : "menu"}
+                            className={`text-xl transition-colors duration-500 ${scrolled ? "text-on-surface" : "text-on-surface"}`}
+                        />
                     </button>
                 </div>
             </div>

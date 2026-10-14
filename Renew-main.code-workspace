@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../Automation/Warehouse"
+		},
+		{
+			"path": "../Automation/Full Proposal"
+		},
+		{
+			"path": "../Automation/centralWeb"
+		}
+	],
+	"settings": {}
+}

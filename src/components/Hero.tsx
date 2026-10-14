@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Icon from "@/components/Icon";
 
 export default function Hero() {
     return (
@@ -10,7 +11,7 @@ export default function Hero() {
                     alt="High-end architectural ceiling with integrated linear LED lighting"
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_SviKYpkFLPcMnT4SQnFK8f1OtkbcfxvOp7OQgT7pr0xSbekHCEmsWHj2yg0pTg55fXk0a08vEPjwEAqxNaMe75SVECS7N8wJvZrx37-fHmuf8OMnJWiJkESR_lK-56J_Mj1TpWRo2FTKaXHlDeQ5X679ETXi_Sce-MF_TweOVYTa1AXIj40rhdnkuM2Eh_ibdfGwmL74M2g3cN1ImtYkIJjpVsj_LYg_pfLEIqE4RUwP9g0HobrvRexa6jupmoVjMrSF-RDvFeyC"
                     fill
-                    priority
+                    loading="lazy"
                 />
                 {/* Soft light gradient */}
                 <div className="absolute inset-0 bg-gradient-to-br from-surface via-surface/90 to-surface-container-low/60" />
@@ -43,7 +44,7 @@ export default function Hero() {
                             href="#request"
                         >
                             Contact Us
-                            <span className="material-symbols-outlined text-xl">arrow_forward</span>
+                            <Icon name="arrow_forward" className="text-xl" />
                         </a>
                         <a
                             className="bg-on-surface/[0.05] text-on-surface border border-on-surface/[0.12] px-6 sm:px-8 py-3.5 sm:py-4 rounded-full font-headline font-bold text-sm sm:text-base flex items-center justify-center hover:bg-on-surface/[0.09] hover:border-on-surface/[0.2] transition-all duration-200"
@@ -58,19 +59,19 @@ export default function Hero() {
                 <div className="animate-fade-up animate-delay-400 mt-12 sm:mt-20 pt-8 sm:pt-10 border-t border-outline-variant/30">
                     <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-6 sm:gap-x-12 gap-y-4 items-center">
                         <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                            <Icon name="verified" className="text-primary text-xl" />
                             <span className="text-sm font-medium text-on-surface-variant">Licensed &amp; Insured</span>
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>schedule</span>
+                            <Icon name="schedule" className="text-primary text-xl" />
                             <span className="text-sm font-medium text-on-surface-variant">24/7 Response</span>
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>workspace_premium</span>
+                            <Icon name="workspace_premium" className="text-primary text-xl" />
                             <span className="text-sm font-medium text-on-surface-variant">30+ Years</span>
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+                            <Icon name="bolt" className="text-primary text-xl" />
                             <span className="text-sm font-medium text-on-surface-variant">Statewide Service</span>
                         </div>
                     </div>
