@@ -15,7 +15,7 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const title = "Renew Lighting Services | Electrical & Lighting Excellence";
+const title = "Renew Lighting Services | Electrical and Lighting";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

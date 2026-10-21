@@ -1,6 +1,6 @@
 // Shared site identity used for metadata, structured data, robots.txt and the sitemap,
 // so the company name/address/contact info only needs to be edited in one place.
-export const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://renewlighting.com").replace(/\/$/, "");
+export const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.renewlighting.com").replace(/\/$/, "");
 
 export const siteName = "Renew Lighting Services";
 
