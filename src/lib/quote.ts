@@ -8,6 +8,11 @@ export type QuoteLine = {
   proposedQty: number;
   proposedDescription: string;
   proposedWatts: string;
+  productCostSource: "" | "prior_proposal" | "warehouse_quote";
+  productCostVendor: string;
+  productCostQuotedAt: string;
+  productCostPriorUseCount: number;
+  suggestedProductId: number | null;
   height: string;
   installNotes: string;
   productCost: number;
@@ -37,6 +42,11 @@ export const emptyLine = (): QuoteLine => ({
   proposedQty: 0,
   proposedDescription: '',
   proposedWatts: '',
+  productCostSource: '',
+  productCostVendor: '',
+  productCostQuotedAt: '',
+  productCostPriorUseCount: 0,
+  suggestedProductId: null,
   height: '',
   installNotes: '',
   productCost: 0,

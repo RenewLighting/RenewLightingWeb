@@ -13,18 +13,22 @@ async function getEmployeeEmail() {
   return email?.endsWith("@renewlighting.com") ? email : null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const email = await getEmployeeEmail();
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const requestedOffset = Number(new URL(request.url).searchParams.get("offset") || 0);
+  const offset = Number.isSafeInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0;
+  const limit = 50;
   try {
     await ensureQuoteTable();
     const { rows } = await db.query(
       `SELECT id, project_name, status, created_at, updated_at
-       FROM quotes WHERE owner_email = $1 ORDER BY updated_at DESC LIMIT 100`,
-      [email],
+       FROM quotes WHERE owner_email = $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3`,
+      [email, limit + 1, offset],
     );
-    return NextResponse.json(rows);
+    const hasMore = rows.length > limit;
+    return NextResponse.json({ quotes: rows.slice(0, limit), hasMore });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Quote storage is unavailable" }, { status: 503 });

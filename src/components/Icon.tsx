@@ -38,6 +38,7 @@ const paths = {
             <path d="M12 8v4m0 4h.01" />
         </>
     ),
+    folder: <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z" />,
     hot_tub: (
         <>
             <path d="M4 13h16l-1.5 7h-13L4 13Z" />

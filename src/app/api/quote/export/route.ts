@@ -1,10 +1,10 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
-import * as XLSX from "xlsx";
 
 import { authOptions } from "@/lib/auth";
 import { calculateQuote, money, type Quote } from "@/lib/quote";
+import { createQuoteWorkbook } from "@/lib/quote-workbook";
 
 export const dynamic = "force-dynamic";
 
@@ -32,22 +32,8 @@ export async function GET(request: Request) {
   const format = url.searchParams.get("format");
 
   if (format === "xlsx") {
-    const rows = totals.rows.map(({ line, productTotal, laborTotal, sellTotal }) => ({
-      "Fixture ID": line.fixtureId,
-      Location: line.location,
-      "Proposed Fixture": line.proposedDescription,
-      Quantity: line.proposedQty,
-      "Product Cost": productTotal,
-      "Labor Cost": laborTotal,
-      "Line Sell Price": sellTotal,
-      Notes: line.installNotes,
-    }));
-    rows.push({ "Fixture ID": "", Location: "", "Proposed Fixture": "TOTAL", Quantity: totals.rows.reduce((sum, row) => sum + row.line.proposedQty, 0), "Product Cost": totals.productCost, "Labor Cost": totals.laborCost, "Line Sell Price": totals.sellTotal, Notes: "" });
-    const workbook = XLSX.utils.book_new();
-    const sheet = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(workbook, sheet, "Quote");
-    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
-    return new NextResponse(buffer, { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="${(quote.projectName || "quote").replace(/[^a-z0-9]+/gi, "-")}.xlsx"` } });
+    const buffer = createQuoteWorkbook(quote);
+    return new NextResponse(new Uint8Array(buffer), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="${(quote.projectName || "quote").replace(/[^a-z0-9]+/gi, "-")}.xlsx"` } });
   }
 
   if (format === "pdf") {

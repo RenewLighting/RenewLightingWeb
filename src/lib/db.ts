@@ -28,6 +28,20 @@ export function ensureQuoteTable() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_quotes_owner_updated ON quotes(owner_email, updated_at DESC);
+    CREATE TABLE IF NOT EXISTS quote_suggestion_history (
+      id BIGSERIAL PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      existing_description TEXT NOT NULL,
+      proposed_description TEXT NOT NULL,
+      proposed_watts TEXT NOT NULL DEFAULT '',
+      product_cost NUMERIC,
+      source_date TIMESTAMPTZ,
+      source_file_hash TEXT NOT NULL,
+      source_row INTEGER NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (owner_email, source_file_hash, source_row)
+    );
+    CREATE INDEX IF NOT EXISTS idx_quote_suggestion_history_owner ON quote_suggestion_history(owner_email, source_date DESC);
   `).then(() => undefined);
   return quoteTableReady;
 }

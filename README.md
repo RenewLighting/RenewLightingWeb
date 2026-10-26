@@ -54,6 +54,11 @@ NEXTAUTH_SECRET=
 NEXTAUTH_URL=https://renewlighting.com
 INVENTORY_ORIGIN=https://warehouse.renewlighting.com
 WAREHOUSE_PROXY_SECRET=
+ONEDRIVE_TENANT_ID=
+ONEDRIVE_CLIENT_ID=
+ONEDRIVE_CLIENT_SECRET=
+ONEDRIVE_DRIVE_ID=
+ONEDRIVE_ROOT_FOLDER_ID=
 ```
 
 Generate different random values for `NEXTAUTH_SECRET` and `WAREHOUSE_PROXY_SECRET`:
@@ -98,6 +103,38 @@ After deploying both repositories:
 6. Exercise inventory page loads, API writes, barcode scanning, file uploads, and sign-out through `https://warehouse.renewlighting.com`.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to optimize its local font assets.
+
+## Quote Builder suggestions
+
+On `/quote`, enter an existing fixture description and the builder searches saved
+Renew proposals for previous replacement descriptions, recorded cost, and usage
+frequency. It also searches active Warehouse products and shows the latest matched
+USD vendor quote when available. Suggestions are opt-in; employees must review the
+fixture and cost, and quote exports retain the internal price basis in Excel.
+Warehouse access is proxied server-side using the existing employee session and
+`WAREHOUSE_PROXY_SECRET`; the secret and signed token are never sent to browser code.
+
+The Quote history dialog lists saved quotes by status and date, and supports loading
+older entries in pages. Use **Import Excel** to drop or select `.xlsx`, `.xls`, or
+`.csv` proposal workbooks. The import preview recognizes existing-fixture and
+proposed/replacement-fixture columns, with optional watts, unit cost, and quote date.
+Employees review the detected rows before importing; uploaded records are available
+to employee fixture suggestions. Re-uploading the same workbook does not duplicate
+its rows. Imported prices are historical references, not current vendor pricing.
+Generated internal Excel workbooks include the existing fixture and unit product
+cost columns to make future imports easier.
+
+**Save to OneDrive** browses the existing shared quote folder and its subfolders;
+the application does not create folders. To enable it, create a Microsoft Entra
+application for server-to-server Microsoft Graph access, grant administrator-
+approved access to the shared document library using the narrowest permission
+available for your tenant, and set `ONEDRIVE_TENANT_ID`, `ONEDRIVE_CLIENT_ID`,
+`ONEDRIVE_CLIENT_SECRET`, `ONEDRIVE_DRIVE_ID`, and `ONEDRIVE_ROOT_FOLDER_ID` in
+Vercel. The drive and root item IDs must point to the existing shared customer/quote
+folder. Keep the client secret server-side; never add a `NEXT_PUBLIC_` prefix.
+The browser can navigate and upload only inside that configured root. Without this
+Microsoft Graph setup, quote history, Excel import, and local downloads remain
+available, but OneDrive browsing and upload will return a configuration message.
 
 ## Learn More
 
