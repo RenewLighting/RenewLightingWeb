@@ -25,6 +25,7 @@ type ImportedLine = {
   existingDescription: string;
   proposedDescription: string;
   proposedWatts: string;
+  proposedQty: number | null;
   productCost: number | null;
   sourceDate: string | null;
 };
@@ -58,6 +59,28 @@ type SuggestionResponse = {
   warehouseAvailable: boolean;
 };
 
+type AICandidate = {
+  id: string;
+  kind: "history" | "warehouse";
+  productId: number | null;
+  description: string;
+  watts: string;
+  quantity: number | null;
+  unitCost: number | null;
+  costSource: "" | "prior_proposal" | "warehouse_quote";
+  vendor: string;
+  quotedAt: string;
+  priorUseCount: number;
+  status: string;
+};
+
+type AIRecommendation = {
+  lineIndex: number;
+  candidate: AICandidate | null;
+  confidence: "high" | "medium" | "low" | "none";
+  reason: string;
+};
+
 export default function QuoteBuilder() {
   const [quote, setQuote] = useState<Quote>(emptyQuote);
   const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([]);
@@ -77,6 +100,8 @@ export default function QuoteBuilder() {
   const [oneDriveFolders, setOneDriveFolders] = useState<OneDriveFolder[]>([]);
   const [oneDriveUrl, setOneDriveUrl] = useState("");
   const [draggingFile, setDraggingFile] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiRecommendations, setAiRecommendations] = useState<AIRecommendation[]>([]);
   const [suggestionState, setSuggestionState] = useState<{ lineIndex: number; query: string; result: SuggestionResponse | null; loading: boolean } | null>(null);
   const suggestionRequest = useRef(0);
   const suggestionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -202,6 +227,64 @@ export default function QuoteBuilder() {
     }
   }
 
+  async function requestAISuggestions() {
+    const lines = quote.lines.map((line, lineIndex) => ({
+      lineIndex,
+      existingDescription: line.existingDescription,
+      existingWatts: line.existingWatts,
+      existingQty: line.existingQty,
+      proposedDescription: line.proposedDescription,
+    })).filter((line) => line.existingDescription.trim().length >= 3);
+    if (!lines.length) {
+      setStorageStatus("Enter an existing fixture description (at least 3 characters) before requesting AI suggestions.");
+      return;
+    }
+    setAiBusy(true);
+    setAiRecommendations([]);
+    setStorageStatus("");
+    try {
+      const response = await fetch("/api/quote/ai-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lines }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "AI suggestions are unavailable.");
+      setAiRecommendations(result.recommendations as AIRecommendation[]);
+      setStorageStatus("AI compared the existing fixtures against proposal history and Warehouse matches. Review each recommendation before applying it.");
+    } catch (error) {
+      setStorageStatus(error instanceof Error ? error.message : "AI suggestions are unavailable.");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  function applyAIRecommendation(recommendation: AIRecommendation) {
+    const candidate = recommendation.candidate;
+    if (!candidate || recommendation.confidence === "none") return;
+    setQuote((current) => ({
+      ...current,
+      lines: current.lines.map((line, index) => {
+        if (index !== recommendation.lineIndex) return line;
+        const hasPrice = candidate.unitCost !== null && candidate.unitCost > 0 && candidate.costSource !== "";
+        const quantity = line.proposedQty > 0 ? line.proposedQty : line.existingQty > 0 ? line.existingQty : 0;
+        return {
+          ...line,
+          proposedDescription: line.proposedDescription || candidate.description,
+          proposedWatts: line.proposedWatts || candidate.watts,
+          proposedQty: quantity,
+          productCost: line.productCost > 0 ? line.productCost : hasPrice ? candidate.unitCost ?? line.productCost : line.productCost,
+          productCostSource: line.productCost > 0 ? line.productCostSource : hasPrice ? candidate.costSource : line.productCostSource,
+          productCostVendor: line.productCost > 0 ? line.productCostVendor : hasPrice ? candidate.vendor : line.productCostVendor,
+          productCostQuotedAt: line.productCost > 0 ? line.productCostQuotedAt : hasPrice ? candidate.quotedAt : line.productCostQuotedAt,
+          productCostPriorUseCount: line.productCost > 0 ? line.productCostPriorUseCount : candidate.kind === "history" ? candidate.priorUseCount : 0,
+          suggestedProductId: candidate.productId ?? line.suggestedProductId,
+        };
+      }),
+    }));
+    setStorageStatus("Applied the AI-selected evidence-backed candidate to empty fields. Review product fit, quantity, and current cost.");
+  }
+
   const formulaFields = [
     { key: "taxRate", label: "Product tax", description: "Product subtotal x tax rate is added before markup.", suffix: "%" },
     { key: "productMarkup", label: "Product margin", description: "Product sell price = taxed product cost / (1 - margin).", suffix: "%" },
@@ -214,6 +297,7 @@ export default function QuoteBuilder() {
   }
 
   function updateLine(index: number, key: keyof QuoteLine, value: string | number) {
+    setAiRecommendations([]);
     setQuote((current) => ({
       ...current,
       lines: current.lines.map((line, lineIndex) => {
@@ -262,6 +346,7 @@ export default function QuoteBuilder() {
 
   function applyHistorySuggestion(lineIndex: number, suggestion: HistoricalSuggestion) {
     clearSuggestionSearch();
+    setAiRecommendations([]);
     setQuote((current) => ({
       ...current,
       lines: current.lines.map((line, index) => index === lineIndex ? {
@@ -281,6 +366,7 @@ export default function QuoteBuilder() {
 
   function applyWarehouseSuggestion(lineIndex: number, suggestion: WarehouseQuoteSuggestion) {
     clearSuggestionSearch();
+    setAiRecommendations([]);
     const hasPrice = suggestion.latest_currency === "USD" && suggestion.latest_price !== null && Number.isFinite(Number(suggestion.latest_price));
     const description = [suggestion.name, suggestion.model_number].filter(Boolean).join(" · ");
     setQuote((current) => ({
@@ -409,36 +495,104 @@ export default function QuoteBuilder() {
         </section>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
-          <section className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl overflow-hidden">
-            <div className="px-6 py-5 border-b border-outline-variant/15 flex items-center justify-between gap-4">
-              <div><h2 className="font-headline text-xl font-bold">Estimate lines</h2><p className="text-sm text-on-surface-variant">Enter fixtures, quantities, materials, and labor. Totals update instantly.</p></div>
-              <button type="button" className="primary-gradient text-on-primary px-4 py-2 rounded-full text-sm font-bold" onClick={() => updateQuote("lines", [...quote.lines, emptyLine()])}>Add line</button>
+          <section className="min-w-0 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/15 px-5 py-5 sm:px-6">
+              <div className="min-w-0">
+                <h2 className="font-headline text-xl font-bold">Estimate lines</h2>
+                <p className="mt-1 text-sm text-on-surface-variant">Each fixture stays together in a full-width card. Edit details and review totals without scrolling sideways.</p>
+                <p className="mt-1 text-xs text-on-surface-variant">AI uses fixture details and matching history—not project addresses—to rank candidates.</p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button type="button" className="rounded-full border border-primary/40 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/[0.05] disabled:opacity-60" onClick={requestAISuggestions} disabled={aiBusy}>{aiBusy ? "AI reviewing…" : "AI suggestions"}</button>
+                <button type="button" className="primary-gradient rounded-full px-4 py-2 text-sm font-bold text-on-primary" onClick={() => updateQuote("lines", [...quote.lines, emptyLine()])}>Add line</button>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-[1570px] w-full text-sm">
-                <thead className="bg-surface-container-low text-left text-xs uppercase tracking-wider text-on-surface-variant"><tr>{["ID", "Location", "Existing fixture", "Proposed fixture", "Qty", "Product cost", "Labor cost", "Line total", ""].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr></thead>
-                <tbody>{quote.lines.map((line, index) => { const row = totals.rows.find((item) => item.line === line); const suggestions = suggestionState?.lineIndex === index ? suggestionState : null; return <tr key={index} className="border-t border-outline-variant/10 align-top">
-                  <td className="p-3"><input className="w-20 rounded-lg border border-outline-variant/30 bg-surface px-2 py-2" value={line.fixtureId} onChange={(event) => updateLine(index, "fixtureId", event.target.value)} placeholder="F01" /></td>
-                  <td className="p-3"><input className="w-40 rounded-lg border border-outline-variant/30 bg-surface px-2 py-2" value={line.location} onChange={(event) => updateLine(index, "location", event.target.value)} placeholder="Location" /></td>
-                  <td className="p-3"><input className="w-64 rounded-lg border border-outline-variant/30 bg-surface px-2 py-2" value={line.existingDescription} onChange={(event) => { updateLine(index, "existingDescription", event.target.value); searchSuggestions(index, event.target.value); }} placeholder="Describe existing fixture" /><p className="mt-1 w-64 text-xs text-on-surface-variant">Type at least 3 characters to see prior proposal and warehouse suggestions.</p>
-                    {suggestions && <div className="mt-2 w-80 max-w-[80vw] rounded-xl border border-outline-variant/30 bg-white p-3 shadow-lg">
-                      {suggestions.loading ? <p className="text-xs text-on-surface-variant">Searching proposal history and warehouse pricing…</p> : suggestions.result ? <>
-                        {suggestions.result.history.length > 0 && <div><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-on-surface-variant">Used in previous proposals</h3><div className="space-y-2">{suggestions.result.history.map((item, suggestionIndex) => <button key={`${item.description}-${suggestionIndex}`} type="button" className="block w-full rounded-lg border border-outline-variant/20 p-2 text-left hover:border-primary/50 hover:bg-primary/[0.04]" onClick={() => applyHistorySuggestion(index, item)}><span className="block text-sm font-semibold">{item.description}</span><span className="mt-1 block text-xs text-on-surface-variant">{item.priorUseCount} prior use{item.priorUseCount === 1 ? "" : "s"}{item.watts ? ` · ${item.watts}` : ""}{item.latestCost && item.latestCost > 0 ? ` · recorded cost ${money(item.latestCost)}` : ""}</span></button>)}</div></div>}
-                        {suggestions.result.warehouse.length > 0 && <div className="mt-3"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-on-surface-variant">Warehouse catalog · possible matches</h3><div className="space-y-2">{suggestions.result.warehouse.map((item) => <button key={item.id} type="button" className="block w-full rounded-lg border border-outline-variant/20 p-2 text-left hover:border-primary/50 hover:bg-primary/[0.04]" onClick={() => applyWarehouseSuggestion(index, item)}><span className="block text-sm font-semibold">{item.name} · {item.model_number}</span><span className="mt-1 block text-xs text-on-surface-variant">{[item.brand, item.category, item.latest_price !== null && item.latest_currency === "USD" ? `${money(item.latest_price)} latest USD quote` : "No recent USD quote"].filter(Boolean).join(" · ")}</span><span className="mt-1 block text-xs text-on-surface-variant">{item.latest_price !== null && item.latest_currency === "USD" ? `${item.latest_vendor || "Unknown vendor"} · ${item.latest_quoted_at ? new Date(item.latest_quoted_at).toLocaleDateString() : "date unavailable"} · quoted at ${item.latest_quantity ?? "?"} units` : "Price must be confirmed separately."}</span></button>)}</div></div>}
-                        {!suggestions.result.warehouseAvailable && <p className="mt-2 text-xs text-error">Warehouse pricing is currently unavailable; prior proposal matches are still shown.</p>}
-                        {!suggestions.result.history.length && !suggestions.result.warehouse.length && <p className="text-xs text-on-surface-variant">No close matches found. Continue entering the fixture and pricing manually.</p>}
-                      </> : <p className="text-xs text-on-surface-variant">Suggestions could not be loaded. You can continue entering the quote manually.</p>}
-                      <button type="button" className="mt-2 text-xs font-semibold text-on-surface-variant underline" onClick={() => setSuggestionState(null)}>Close suggestions</button>
-                    </div>}
-                  </td>
-                  <td className="p-3"><input className="w-64 rounded-lg border border-outline-variant/30 bg-surface px-2 py-2" value={line.proposedDescription} onChange={(event) => updateLine(index, "proposedDescription", event.target.value)} placeholder="Fixture description" /><textarea className="mt-2 w-64 rounded-lg border border-outline-variant/30 bg-surface px-2 py-2" value={line.installNotes} onChange={(event) => updateLine(index, "installNotes", event.target.value)} placeholder="Install notes" rows={2} /></td>
-                  <td className="p-3"><input type="number" min="0" className="w-20 rounded-lg border border-outline-variant/30 bg-surface px-2 py-2" value={line.proposedQty || ""} onChange={(event) => updateLine(index, "proposedQty", numberValue(event.target.value))} /></td>
-                  <td className="p-3"><input type="number" min="0" step="0.01" className="w-28 rounded-lg border border-outline-variant/30 bg-surface px-2 py-2" value={line.productCost || ""} onChange={(event) => updateLine(index, "productCost", numberValue(event.target.value))} />{line.productCostSource && <p className="mt-1 max-w-40 text-xs text-on-surface-variant">{line.productCostSource === "warehouse_quote" ? `Warehouse quote: ${line.productCostVendor || "vendor not recorded"}${line.productCostQuotedAt ? ` · ${new Date(line.productCostQuotedAt).toLocaleDateString()}` : ""}` : `Prior proposal cost · used ${line.productCostPriorUseCount} time(s)`}</p>}</td>
-                  <td className="p-3"><input type="number" min="0" step="0.01" className="w-28 rounded-lg border border-outline-variant/30 bg-surface px-2 py-2" value={line.laborCost || ""} onChange={(event) => updateLine(index, "laborCost", numberValue(event.target.value))} /></td>
-                  <td className="p-3 font-semibold">{row ? money(row.sellTotal) : money(0)}</td>
-                  <td className="p-3"><button type="button" className="text-error text-xs font-bold" onClick={() => { clearSuggestionSearch(); updateQuote("lines", quote.lines.filter((_, lineIndex) => lineIndex !== index)); }}>Remove</button></td>
-                </tr>; })}</tbody>
-              </table>
+
+            <div className="space-y-4 p-4 sm:p-5">
+              {quote.lines.map((line, index) => {
+                const row = totals.rows.find((item) => item.line === line);
+                const suggestions = suggestionState?.lineIndex === index ? suggestionState : null;
+                const lineAI = aiRecommendations.filter((item) => item.lineIndex === index);
+                const fieldClass = "mt-1.5 w-full min-w-0 rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+                const labelClass = "block min-w-0 text-xs font-semibold text-on-surface-variant";
+                return <article key={index} className="min-w-0 overflow-hidden rounded-2xl border border-outline-variant/25 bg-white shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/15 bg-surface-container-low/60 px-4 py-3 sm:px-5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                      <span className="rounded-full bg-primary/[0.08] px-3 py-1 text-xs font-bold text-primary">LINE {String(index + 1).padStart(2, "0")}</span>
+                      <label className="flex items-center gap-2 text-xs font-semibold text-on-surface-variant">
+                        Fixture ID
+                        <input className="w-24 rounded-lg border border-outline-variant/30 bg-white px-2.5 py-1.5 text-sm font-medium text-on-surface outline-none focus:border-primary" value={line.fixtureId} onChange={(event) => updateLine(index, "fixtureId", event.target.value)} placeholder="F01" />
+                      </label>
+                      <label className="flex min-w-40 flex-1 items-center gap-2 text-xs font-semibold text-on-surface-variant sm:flex-none">
+                        Location
+                        <input className="w-full rounded-lg border border-outline-variant/30 bg-white px-2.5 py-1.5 text-sm font-medium text-on-surface outline-none focus:border-primary sm:w-48" value={line.location} onChange={(event) => updateLine(index, "location", event.target.value)} placeholder="Building / area" />
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right"><span className="block text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Line sell total</span><strong className="font-headline text-lg text-primary">{row ? money(row.sellTotal) : money(0)}</strong></div>
+                      <button type="button" aria-label={`Remove estimate line ${index + 1}`} className="rounded-full px-3 py-2 text-xs font-bold text-error hover:bg-error/5" onClick={() => { clearSuggestionSearch(); updateQuote("lines", quote.lines.filter((_, lineIndex) => lineIndex !== index)); }}>Remove</button>
+                    </div>
+                  </div>
+
+                  <div className="grid min-w-0 grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2">
+                    <section className="min-w-0 rounded-xl border border-outline-variant/15 bg-surface-container-low/30 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div><h3 className="text-sm font-bold text-on-surface">Existing fixture</h3><p className="mt-0.5 text-xs text-on-surface-variant">What is being replaced?</p></div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Current</span>
+                      </div>
+                      <label className={labelClass}>Fixture description
+                        <input className={fieldClass} value={line.existingDescription} onChange={(event) => { updateLine(index, "existingDescription", event.target.value); searchSuggestions(index, event.target.value); }} placeholder="Describe the current light" />
+                      </label>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <label className={labelClass}>Existing watts<input className={fieldClass} value={line.existingWatts} onChange={(event) => updateLine(index, "existingWatts", event.target.value)} placeholder="e.g. 150W" /></label>
+                        <label className={labelClass}>Existing quantity<input type="number" min="0" className={fieldClass} value={line.existingQty || ""} onChange={(event) => updateLine(index, "existingQty", numberValue(event.target.value))} placeholder="0" /></label>
+                      </div>
+                      <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant">Enter at least 3 characters for prior proposal and Warehouse matches.</p>
+                      {suggestions && <div className="mt-3 max-h-72 space-y-3 overflow-y-auto rounded-xl border border-outline-variant/20 bg-white p-3">
+                        {suggestions.loading ? <p className="text-xs text-on-surface-variant">Searching proposal history and Warehouse pricing…</p> : suggestions.result ? <>
+                          {suggestions.result.history.length > 0 && <div><h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Prior proposals</h4><div className="space-y-2">{suggestions.result.history.map((item, suggestionIndex) => <button key={`${item.description}-${suggestionIndex}`} type="button" className="block w-full rounded-lg border border-outline-variant/20 p-2.5 text-left transition hover:border-primary/50 hover:bg-primary/[0.04]" onClick={() => applyHistorySuggestion(index, item)}><span className="block break-words text-sm font-semibold">{item.description}</span><span className="mt-1 block text-xs text-on-surface-variant">{item.priorUseCount} prior use{item.priorUseCount === 1 ? "" : "s"}{item.watts ? ` · ${item.watts}` : ""}{item.latestCost && item.latestCost > 0 ? ` · ${money(item.latestCost)} recorded cost` : ""}</span></button>)}</div></div>}
+                          {suggestions.result.warehouse.length > 0 && <div><h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Warehouse catalog matches</h4><div className="space-y-2">{suggestions.result.warehouse.map((item) => <button key={item.id} type="button" className="block w-full rounded-lg border border-outline-variant/20 p-2.5 text-left transition hover:border-primary/50 hover:bg-primary/[0.04]" onClick={() => applyWarehouseSuggestion(index, item)}><span className="block break-words text-sm font-semibold">{item.name} · {item.model_number}</span><span className="mt-1 block text-xs text-on-surface-variant">{[item.brand, item.category, item.latest_price !== null && item.latest_currency === "USD" ? `${money(item.latest_price)} latest USD quote` : "No recent USD quote"].filter(Boolean).join(" · ")}</span><span className="mt-1 block text-xs text-on-surface-variant">{item.latest_price !== null && item.latest_currency === "USD" ? `${item.latest_vendor || "Unknown vendor"} · ${item.latest_quoted_at ? new Date(item.latest_quoted_at).toLocaleDateString() : "date unavailable"} · quoted for ${item.latest_quantity ?? "?"} units` : "Price must be confirmed separately."}</span></button>)}</div></div>}
+                          {!suggestions.result.warehouseAvailable && <p className="text-xs text-error">Warehouse pricing is currently unavailable; prior proposal matches are still shown.</p>}
+                          {!suggestions.result.history.length && !suggestions.result.warehouse.length && <p className="text-xs text-on-surface-variant">No close matches found. You can continue entering this line manually.</p>}
+                        </> : <p className="text-xs text-on-surface-variant">Suggestions could not be loaded. Continue entering the quote manually.</p>}
+                        <button type="button" className="text-xs font-semibold text-on-surface-variant underline" onClick={() => setSuggestionState(null)}>Close suggestions</button>
+                      </div>}
+                    </section>
+
+                    <section className="min-w-0 rounded-xl border border-primary/15 bg-primary/[0.025] p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div><h3 className="text-sm font-bold text-on-surface">Proposed replacement</h3><p className="mt-0.5 text-xs text-on-surface-variant">What will be installed?</p></div>
+                        <span className="rounded-full bg-primary/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">Proposed</span>
+                      </div>
+                      <label className={labelClass}>Replacement fixture
+                        <input className={fieldClass} value={line.proposedDescription} onChange={(event) => updateLine(index, "proposedDescription", event.target.value)} placeholder="Fixture / model description" />
+                      </label>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <label className={labelClass}>Proposed watts<input className={fieldClass} value={line.proposedWatts} onChange={(event) => updateLine(index, "proposedWatts", event.target.value)} placeholder="e.g. 40W" /></label>
+                        <label className={labelClass}>Install quantity<input type="number" min="0" className={fieldClass} value={line.proposedQty || ""} onChange={(event) => updateLine(index, "proposedQty", numberValue(event.target.value))} placeholder="0" /></label>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <label className={labelClass}>Product unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.productCost || ""} onChange={(event) => updateLine(index, "productCost", numberValue(event.target.value))} placeholder="$0.00" /></label>
+                        <label className={labelClass}>Labor unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.laborCost || ""} onChange={(event) => updateLine(index, "laborCost", numberValue(event.target.value))} placeholder="$0.00" /></label>
+                      </div>
+                      {line.productCostSource && <p className="mt-2 text-[11px] text-on-surface-variant">{line.productCostSource === "warehouse_quote" ? `Warehouse quote: ${line.productCostVendor || "vendor not recorded"}${line.productCostQuotedAt ? ` · ${new Date(line.productCostQuotedAt).toLocaleDateString()}` : ""}` : `Prior proposal cost · used ${line.productCostPriorUseCount} time(s)`}</p>}
+                      <label className={`${labelClass} mt-3`}>Installation notes
+                        <textarea className={`${fieldClass} resize-y`} value={line.installNotes} onChange={(event) => updateLine(index, "installNotes", event.target.value)} placeholder="Optional notes for installation" rows={2} />
+                      </label>
+                      {lineAI.map((item) => <div key={`${item.lineIndex}-${item.confidence}`} className="mt-3 rounded-xl border border-primary/20 bg-white p-3">
+                        {item.candidate ? <>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-primary">AI match · {item.confidence} confidence</p>
+                          <p className="mt-1 break-words text-sm font-semibold">{item.candidate.description}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{item.reason}</p>
+                          <p className="mt-1 text-xs text-on-surface-variant">{item.candidate.kind === "history" ? `Proposal history · ${item.candidate.priorUseCount} use${item.candidate.priorUseCount === 1 ? "" : "s"}${item.candidate.status ? ` · ${item.candidate.status}` : ""}` : "Warehouse catalog"}{item.candidate.watts ? ` · ${item.candidate.watts}` : ""}{item.candidate.quantity ? ` · prior quantity ${item.candidate.quantity}` : ""}{item.candidate.unitCost !== null ? ` · ${money(item.candidate.unitCost)} / unit` : " · no verified unit cost"}</p>
+                          {item.candidate.vendor && <p className="mt-1 text-xs text-on-surface-variant">{item.candidate.vendor}{item.candidate.quotedAt ? ` · ${new Date(item.candidate.quotedAt).toLocaleDateString()}` : ""}</p>}
+                          <button type="button" className="mt-2 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-on-primary" onClick={() => applyAIRecommendation(item)}>Apply to empty fields</button>
+                        </> : <><p className="text-xs font-bold text-on-surface-variant">No supported AI match</p><p className="mt-1 text-xs text-on-surface-variant">{item.reason}</p></>}
+                      </div>)}
+                    </section>
+                  </div>
+                </article>;
+              })}
             </div>
           </section>
 
@@ -493,8 +647,8 @@ export default function QuoteBuilder() {
               </div>
               <div className="overflow-x-auto rounded-xl border border-outline-variant/20">
                 <table className="w-full min-w-[760px] text-left text-sm">
-                  <thead className="bg-surface-container-low text-xs uppercase tracking-wide text-on-surface-variant"><tr><th className="px-3 py-2">Existing fixture</th><th className="px-3 py-2">Proposed fixture</th><th className="px-3 py-2">Watts</th><th className="px-3 py-2">Product cost</th><th className="px-3 py-2">Quote date</th></tr></thead>
-                  <tbody>{importPreview.records.slice(0, 20).map((record) => <tr key={record.sourceRow} className="border-t border-outline-variant/15"><td className="px-3 py-2">{record.existingDescription}</td><td className="px-3 py-2">{record.proposedDescription}</td><td className="px-3 py-2">{record.proposedWatts || "—"}</td><td className="px-3 py-2">{record.productCost === null ? "—" : money(record.productCost)}</td><td className="px-3 py-2">{record.sourceDate ? new Date(record.sourceDate).toLocaleDateString() : "Not provided"}</td></tr>)}</tbody>
+                  <thead className="bg-surface-container-low text-xs uppercase tracking-wide text-on-surface-variant"><tr><th className="px-3 py-2">Existing fixture</th><th className="px-3 py-2">Proposed fixture</th><th className="px-3 py-2">Watts</th><th className="px-3 py-2">Qty</th><th className="px-3 py-2">Product cost</th><th className="px-3 py-2">Quote date</th></tr></thead>
+                  <tbody>{importPreview.records.slice(0, 20).map((record) => <tr key={record.sourceRow} className="border-t border-outline-variant/15"><td className="px-3 py-2">{record.existingDescription}</td><td className="px-3 py-2">{record.proposedDescription}</td><td className="px-3 py-2">{record.proposedWatts || "—"}</td><td className="px-3 py-2">{record.proposedQty ?? "—"}</td><td className="px-3 py-2">{record.productCost === null ? "—" : money(record.productCost)}</td><td className="px-3 py-2">{record.sourceDate ? new Date(record.sourceDate).toLocaleDateString() : "Not provided"}</td></tr>)}</tbody>
                 </table>
                 {importPreview.records.length > 20 && <p className="border-t border-outline-variant/15 p-3 text-xs text-on-surface-variant">Showing the first 20 rows. All {importPreview.records.length} detected rows will be imported.</p>}
               </div>

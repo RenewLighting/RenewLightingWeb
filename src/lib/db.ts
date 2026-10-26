@@ -34,6 +34,7 @@ export function ensureQuoteTable() {
       existing_description TEXT NOT NULL,
       proposed_description TEXT NOT NULL,
       proposed_watts TEXT NOT NULL DEFAULT '',
+      proposed_qty NUMERIC,
       product_cost NUMERIC,
       source_date TIMESTAMPTZ,
       source_file_hash TEXT NOT NULL,
@@ -41,6 +42,7 @@ export function ensureQuoteTable() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE (owner_email, source_file_hash, source_row)
     );
+    ALTER TABLE quote_suggestion_history ADD COLUMN IF NOT EXISTS proposed_qty NUMERIC;
     CREATE INDEX IF NOT EXISTS idx_quote_suggestion_history_owner ON quote_suggestion_history(owner_email, source_date DESC);
   `).then(() => undefined);
   return quoteTableReady;

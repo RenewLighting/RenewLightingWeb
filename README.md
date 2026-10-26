@@ -54,6 +54,8 @@ NEXTAUTH_SECRET=
 NEXTAUTH_URL=https://renewlighting.com
 INVENTORY_ORIGIN=https://warehouse.renewlighting.com
 WAREHOUSE_PROXY_SECRET=
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-5-5
 ONEDRIVE_TENANT_ID=
 ONEDRIVE_CLIENT_ID=
 ONEDRIVE_CLIENT_SECRET=
@@ -113,6 +115,19 @@ USD vendor quote when available. Suggestions are opt-in; employees must review t
 fixture and cost, and quote exports retain the internal price basis in Excel.
 Warehouse access is proxied server-side using the existing employee session and
 `WAREHOUSE_PROXY_SECRET`; the secret and signed token are never sent to browser code.
+
+The **AI suggestions** action uses Claude to rank only the historical proposal and
+Warehouse catalog candidates retrieved for the existing fixture lines. It can fill
+an empty proposed fixture, wattage, and supported cost, and copy a quantity already
+entered for the existing fixtures. It does not invent fixtures, costs, or quantities;
+the employee reviews each candidate before applying it. AI candidate ranking is a
+retrieval-augmented workflow, not a fine-tuned model. When configured, the quote line
+fixture descriptions, watts, quantities, and matching proposal/catalog candidates
+are sent to Anthropic's API for ranking; project/customer address fields are not sent.
+Configure `ANTHROPIC_API_KEY` as a server-only Vercel environment variable and, if
+needed, set `ANTHROPIC_MODEL` to a Claude model enabled for your Anthropic account.
+If the key is absent, AI suggestions report that configuration is required; existing
+non-AI historical and Warehouse suggestions remain available.
 
 The Quote history dialog lists saved quotes by status and date, and supports loading
 older entries in pages. Use **Import Excel** to drop or select `.xlsx`, `.xls`, or

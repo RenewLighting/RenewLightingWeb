@@ -20,6 +20,7 @@ type ImportedLine = {
   existingDescription: string;
   proposedDescription: string;
   proposedWatts: string;
+  proposedQty: number | null;
   productCost: number | null;
   sourceDate: string | null;
 };
@@ -53,10 +54,16 @@ function parseCost(value: unknown): number | null {
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
 }
 
+function parseQuantity(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(String(value ?? "").replace(/[,\s]/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 100_000 ? parsed : null;
+}
+
 function detectRecords(workbook: XLSX.WorkBook) {
   const existingAliases = ["existingfixture", "existingdescription", "existingfixturedescription", "fixturetoreplace", "fixturebeingreplaced", "oldfixture", "existing"];
   const proposedAliases = ["proposedfixture", "proposeddescription", "replacementfixture", "recommendedfixture", "newfixture", "replacement", "proposed"];
   const wattsAliases = ["proposedwatts", "replacementwatts", "newwatts", "watts", "wattage"];
+  const quantityAliases = ["proposedqty", "replacementqty", "quantity", "qty", "count"];
   const costAliases = ["unitproductcost", "unitcost", "productcost", "materialunitcost", "materialcost", "unitprice", "cost"];
   const dateAliases = ["quotedate", "proposaldate", "pricedate", "date"];
   const records: ImportedLine[] = [];
@@ -75,13 +82,14 @@ function detectRecords(workbook: XLSX.WorkBook) {
     }
     const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
     let headerRow = -1;
-    let columns: { existing?: number; proposed?: number; watts?: number; cost?: number; date?: number } = {};
+    let columns: { existing?: number; proposed?: number; watts?: number; quantity?: number; cost?: number; date?: number } = {};
     for (let rowIndex = 0; rowIndex < Math.min(rows.length, 30); rowIndex += 1) {
       const row = rows[rowIndex] || [];
       const candidate = {
         existing: findColumn(row, existingAliases),
         proposed: findColumn(row, proposedAliases),
         watts: findColumn(row, wattsAliases),
+        quantity: findColumn(row, quantityAliases),
         cost: findColumn(row, costAliases),
         date: findColumn(row, dateAliases),
       };
@@ -110,6 +118,7 @@ function detectRecords(workbook: XLSX.WorkBook) {
         existingDescription,
         proposedDescription,
         proposedWatts: rawWatts.slice(0, 100),
+        proposedQty: columns.quantity === undefined ? null : parseQuantity(row[columns.quantity]),
         productCost: columns.cost === undefined ? null : parseCost(row[columns.cost]),
         sourceDate: rawDate,
       });
@@ -191,10 +200,12 @@ export async function PUT(request: Request) {
     const existingDescription = typeof record?.existingDescription === "string" ? record.existingDescription.trim().slice(0, 1000) : "";
     const proposedDescription = typeof record?.proposedDescription === "string" ? record.proposedDescription.trim().slice(0, 1000) : "";
     const sourceRow = Number(record?.sourceRow);
+    const proposedQty = record?.proposedQty === null ? null : Number(record?.proposedQty);
     const productCost = record?.productCost === null ? null : Number(record?.productCost);
     const sourceDate = record?.sourceDate === null || record?.sourceDate === "" ? null : parseDate(record?.sourceDate);
     if (!existingDescription || !proposedDescription || !Number.isSafeInteger(sourceRow) || sourceRow < 1
       || productCost !== null && (!Number.isFinite(productCost) || productCost < 0 || productCost > 1_000_000)
+      || proposedQty !== null && (!Number.isFinite(proposedQty) || proposedQty <= 0 || proposedQty > 100_000)
       || record?.sourceDate && !sourceDate || sourceRows.has(sourceRow)) {
       return NextResponse.json({ error: `Invalid proposal row ${index + 1}` }, { status: 400 });
     }
@@ -204,6 +215,7 @@ export async function PUT(request: Request) {
       existingDescription,
       proposedDescription,
       proposedWatts: typeof record?.proposedWatts === "string" ? record.proposedWatts.slice(0, 100) : "",
+      proposedQty,
       productCost,
       sourceDate,
     });
@@ -219,11 +231,11 @@ export async function PUT(request: Request) {
     transactionStarted = true;
     const result = await connection.query(
       `INSERT INTO quote_suggestion_history
-        (owner_email, existing_description, proposed_description, proposed_watts, product_cost, source_date, source_file_hash, source_row)
+        (owner_email, existing_description, proposed_description, proposed_watts, proposed_qty, product_cost, source_date, source_file_hash, source_row)
        SELECT $1, imported.existing_description, imported.proposed_description, imported.proposed_watts,
-         imported.product_cost, imported.source_date, $2, imported.source_row
-       FROM unnest($3::integer[], $4::text[], $5::text[], $6::text[], $7::numeric[], $8::timestamptz[])
-         AS imported(source_row, existing_description, proposed_description, proposed_watts, product_cost, source_date)
+         imported.proposed_qty, imported.product_cost, imported.source_date, $2, imported.source_row
+       FROM unnest($3::integer[], $4::text[], $5::text[], $6::text[], $7::numeric[], $8::numeric[], $9::timestamptz[])
+         AS imported(source_row, existing_description, proposed_description, proposed_watts, proposed_qty, product_cost, source_date)
        ON CONFLICT (owner_email, source_file_hash, source_row) DO NOTHING`,
       [
         email,
@@ -232,6 +244,7 @@ export async function PUT(request: Request) {
         records.map((record) => record.existingDescription),
         records.map((record) => record.proposedDescription),
         records.map((record) => record.proposedWatts),
+        records.map((record) => record.proposedQty),
         records.map((record) => record.productCost),
         records.map((record) => record.sourceDate),
       ],
