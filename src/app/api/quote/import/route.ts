@@ -60,13 +60,14 @@ function parseQuantity(value: unknown): number | null {
 }
 
 function detectRecords(workbook: XLSX.WorkBook) {
-  const existingAliases = ["existingfixture", "existingdescription", "existingfixturedescription", "fixturetoreplace", "fixturebeingreplaced", "oldfixture", "existing"];
-  const proposedAliases = ["proposedfixture", "proposeddescription", "replacementfixture", "recommendedfixture", "newfixture", "replacement", "proposed"];
-  const wattsAliases = ["proposedwatts", "replacementwatts", "newwatts", "watts", "wattage"];
-  const quantityAliases = ["proposedqty", "replacementqty", "quantity", "qty", "count"];
+  const existingAliases = ["existingfixture", "existingdescription", "existingfixturedescription", "existingfixturedescrption", "fixturetoreplace", "fixturebeingreplaced", "oldfixture", "existing"];
+  const proposedAliases = ["proposedfixture", "proposeddescription", "proposedfixturedescrption", "replacementfixture", "recommendedfixture", "newfixture", "replacement", "proposed"];
+  const wattsAliases = ["proposedwatts", "replacementwatts", "newwatts", "inputwatts", "watts", "wattage"];
+  const quantityAliases = ["proposedqty", "proposedfixtureqty", "replacementqty", "quantity", "qty", "count"];
   const costAliases = ["unitproductcost", "unitcost", "productcost", "materialunitcost", "materialcost", "unitprice", "cost"];
   const dateAliases = ["quotedate", "proposaldate", "pricedate", "date"];
   const records: ImportedLine[] = [];
+  const seenSheetRecords = new Set<string>();
   let detectedSheet = "";
   let skippedRows = 0;
 
@@ -102,19 +103,19 @@ function detectRecords(workbook: XLSX.WorkBook) {
     if (headerRow < 0 || columns.existing === undefined || columns.proposed === undefined) continue;
     detectedSheet ||= sheetName;
 
+    const sheetRecords: Omit<ImportedLine, "sourceRow">[] = [];
     for (let rowIndex = headerRow + 1; rowIndex < rows.length; rowIndex += 1) {
       const row = rows[rowIndex] || [];
       const existingDescription = String(row[columns.existing] ?? "").trim().slice(0, 1000);
       const proposedDescription = String(row[columns.proposed] ?? "").trim().slice(0, 1000);
       if (!existingDescription && !proposedDescription) continue;
-      if (!existingDescription || !proposedDescription || records.length >= maxRecords) {
+      if (!existingDescription || !proposedDescription || records.length + sheetRecords.length >= maxRecords) {
         skippedRows += 1;
         continue;
       }
       const rawWatts = columns.watts === undefined ? "" : String(row[columns.watts] ?? "").trim();
       const rawDate = columns.date === undefined ? null : parseDate(row[columns.date]);
-      records.push({
-        sourceRow: records.length + 1,
+      sheetRecords.push({
         existingDescription,
         proposedDescription,
         proposedWatts: rawWatts.slice(0, 100),
@@ -122,6 +123,12 @@ function detectRecords(workbook: XLSX.WorkBook) {
         productCost: columns.cost === undefined ? null : parseCost(row[columns.cost]),
         sourceDate: rawDate,
       });
+    }
+
+    const sheetSignature = JSON.stringify(sheetRecords);
+    if (sheetRecords.length && !seenSheetRecords.has(sheetSignature)) {
+      seenSheetRecords.add(sheetSignature);
+      records.push(...sheetRecords.map((record, index) => ({ ...record, sourceRow: records.length + index + 1 })));
     }
   }
   return { records, detectedSheet, skippedRows };
@@ -148,8 +155,8 @@ export async function POST(request: Request) {
   if (file.size <= 0 || file.size > maxFileSize) {
     return NextResponse.json({ error: "The file must be between 1 byte and 4 MB" }, { status: 413 });
   }
-  if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
-    return NextResponse.json({ error: "Supported formats are .xlsx, .xls, and .csv" }, { status: 415 });
+  if (!/\.(xlsx|xls|xlsm|csv)$/i.test(file.name)) {
+    return NextResponse.json({ error: "Supported formats are .xlsx, .xls, .xlsm, and .csv" }, { status: 415 });
   }
 
   try {

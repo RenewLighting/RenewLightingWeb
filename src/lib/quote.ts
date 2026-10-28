@@ -1,4 +1,5 @@
 export type QuoteLine = {
+  id: string;
   fixtureId: string;
   address: string;
   location: string;
@@ -13,6 +14,7 @@ export type QuoteLine = {
   productCostQuotedAt: string;
   productCostPriorUseCount: number;
   suggestedProductId: number | null;
+  photoIds: string[];
   height: string;
   installNotes: string;
   productCost: number;
@@ -33,6 +35,7 @@ export type Quote = {
 };
 
 export const emptyLine = (): QuoteLine => ({
+  id: crypto.randomUUID(),
   fixtureId: '',
   address: '',
   location: '',
@@ -47,6 +50,7 @@ export const emptyLine = (): QuoteLine => ({
   productCostQuotedAt: '',
   productCostPriorUseCount: 0,
   suggestedProductId: null,
+  photoIds: [],
   height: '',
   installNotes: '',
   productCost: 0,

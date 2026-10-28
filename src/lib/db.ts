@@ -28,6 +28,14 @@ export function ensureQuoteTable() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_quotes_owner_updated ON quotes(owner_email, updated_at DESC);
+    CREATE TABLE IF NOT EXISTS quote_line_photos (
+      id TEXT PRIMARY KEY,
+      owner_email TEXT NOT NULL,
+      content_type TEXT NOT NULL CHECK (content_type = 'image/jpeg'),
+      image_data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_quote_line_photos_owner_created ON quote_line_photos(owner_email, created_at DESC);
     CREATE TABLE IF NOT EXISTS quote_suggestion_history (
       id BIGSERIAL PRIMARY KEY,
       owner_email TEXT NOT NULL,

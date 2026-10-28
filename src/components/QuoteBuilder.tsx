@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 import Icon from "@/components/Icon";
 import { calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
@@ -81,6 +82,38 @@ type AIRecommendation = {
   reason: string;
 };
 
+const maxLinePhotos = 3;
+
+function quotePhotoIds(quote: Quote) {
+  return Array.from(new Set(quote.lines.flatMap((line) => line.photoIds)));
+}
+
+async function compressQuotePhoto(file: File) {
+  if (!file.type.startsWith("image/")) throw new Error(`${file.name} is not an image.`);
+  if (file.size > 15 * 1024 * 1024) throw new Error(`${file.name} is larger than the 15 MB upload limit.`);
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This browser could not prepare the photo.");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    for (const quality of [0.82, 0.72, 0.62, 0.52]) {
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      if (blob && blob.size <= 2 * 1024 * 1024) return blob;
+    }
+    throw new Error(`${file.name} could not be compressed below 2 MB. Choose a smaller photo.`);
+  } finally {
+    bitmap.close();
+  }
+}
+
 export default function QuoteBuilder() {
   const [quote, setQuote] = useState<Quote>(emptyQuote);
   const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([]);
@@ -101,8 +134,11 @@ export default function QuoteBuilder() {
   const [oneDriveUrl, setOneDriveUrl] = useState("");
   const [draggingFile, setDraggingFile] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
+  const [uploadingLineId, setUploadingLineId] = useState<string | null>(null);
   const [aiRecommendations, setAiRecommendations] = useState<AIRecommendation[]>([]);
   const [suggestionState, setSuggestionState] = useState<{ lineIndex: number; query: string; result: SuggestionResponse | null; loading: boolean } | null>(null);
+  const persistedPhotoIds = useRef<string[]>([]);
+  const uploadedPhotoIds = useRef<string[]>([]);
   const suggestionRequest = useRef(0);
   const suggestionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggestionController = useRef<AbortController | null>(null);
@@ -178,7 +214,7 @@ export default function QuoteBuilder() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not import quote history");
-      setStorageStatus(`${result.imported} historical line${result.imported === 1 ? "" : "s"} added to fixture suggestions${result.duplicates ? `; ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped` : ""}.`);
+      setStorageStatus(`${result.imported} historical line${result.imported === 1 ? "" : "s"} added to fixture suggestions${result.duplicates ? `; ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped` : ""}. Enter an existing fixture description and choose a prior proposal match to use it. Imported lines do not appear in Quote history.`);
       setImportPreview(null);
       setShowImport(false);
     } catch (error) {
@@ -315,6 +351,101 @@ export default function QuoteBuilder() {
     }));
   }
 
+  async function uploadLinePhotos(lineId: string, files: FileList | null) {
+    if (!files?.length) return;
+    const line = quote.lines.find((item) => item.id === lineId);
+    if (!line) return;
+    const remaining = maxLinePhotos - line.photoIds.length;
+    if (remaining <= 0) {
+      setStorageStatus(`Each estimate line can have up to ${maxLinePhotos} photos.`);
+      return;
+    }
+    const selectedFiles = Array.from(files);
+    if (selectedFiles.length > remaining) {
+      setStorageStatus(`Only ${remaining} more photo${remaining === 1 ? "" : "s"} can be added to this line.`);
+    } else {
+      setStorageStatus("");
+    }
+
+    setUploadingLineId(lineId);
+    const uploadedIds: string[] = [];
+    try {
+      for (const file of selectedFiles.slice(0, remaining)) {
+        const photo = await compressQuotePhoto(file);
+        const form = new FormData();
+        form.set("photo", photo, "quote-line-photo.jpg");
+        const response = await fetch("/api/quote/photos", { method: "POST", body: form });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || `Could not upload ${file.name}.`);
+        if (typeof result.id !== "string") throw new Error(`The upload for ${file.name} returned an invalid photo ID.`);
+        uploadedIds.push(result.id);
+        uploadedPhotoIds.current = [...uploadedPhotoIds.current, result.id];
+      }
+      setQuote((current) => ({
+        ...current,
+        lines: current.lines.map((item) => item.id === lineId
+          ? { ...item, photoIds: [...item.photoIds, ...uploadedIds] }
+          : item),
+      }));
+      if (uploadedIds.length) setStorageStatus(`${uploadedIds.length} photo${uploadedIds.length === 1 ? "" : "s"} added to the estimate line.`);
+    } catch (error) {
+      if (uploadedIds.length) {
+        setQuote((current) => ({
+          ...current,
+          lines: current.lines.map((item) => item.id === lineId
+            ? { ...item, photoIds: [...item.photoIds, ...uploadedIds] }
+            : item),
+        }));
+      }
+      setStorageStatus(error instanceof Error ? error.message : "Could not upload the line photo.");
+    } finally {
+      setUploadingLineId(null);
+    }
+  }
+
+  function removeLinePhoto(lineId: string, photoId: string) {
+    setQuote((current) => ({
+      ...current,
+      lines: current.lines.map((item) => item.id === lineId
+        ? { ...item, photoIds: item.photoIds.filter((id) => id !== photoId) }
+        : item),
+    }));
+    setStorageStatus("Photo removed from the estimate line. Save the draft to keep this change.");
+  }
+
+  function removeEstimateLine(line: QuoteLine) {
+    clearSuggestionSearch();
+    updateQuote("lines", quote.lines.filter((item) => item.id !== line.id));
+    setStorageStatus("Estimate line removed. Save the draft to keep this change.");
+  }
+
+  async function deleteStoredPhotos(photoIds: string[]) {
+    const results = await Promise.all(photoIds.map((id) => fetch(`/api/quote/photos/${id}`, { method: "DELETE" })));
+    return results.every((response) => response.ok);
+  }
+
+  async function tryDeleteStoredPhotos(photoIds: string[]) {
+    try {
+      return photoIds.length === 0 || await deleteStoredPhotos(Array.from(new Set(photoIds)));
+    } catch {
+      return false;
+    }
+  }
+
+  async function startNewQuote() {
+    if (!window.confirm("Start a new quote? Unsaved changes will be lost.")) return;
+    const unsavedPhotoIds = uploadedPhotoIds.current.filter((id) => !persistedPhotoIds.current.includes(id));
+    const photosDeleted = await tryDeleteStoredPhotos(unsavedPhotoIds);
+    uploadedPhotoIds.current = photosDeleted ? [] : unsavedPhotoIds;
+    setSelectedQuoteId("");
+    setQuote(emptyQuote());
+    persistedPhotoIds.current = [];
+    clearSuggestionSearch();
+    setStorageStatus(photosDeleted
+      ? "New quote started."
+      : "New quote started, but one or more unsaved photos could not be deleted.");
+  }
+
   function searchSuggestions(lineIndex: number, query: string) {
     const requestId = ++suggestionRequest.current;
     if (suggestionTimer.current) clearTimeout(suggestionTimer.current);
@@ -410,12 +541,22 @@ export default function QuoteBuilder() {
       });
       const saved = await response.json();
       if (!response.ok) throw new Error(saved.error || "Could not save quote");
+      const currentPhotoIds = quotePhotoIds(quote);
+      const removedPhotoIds = Array.from(new Set([
+        ...persistedPhotoIds.current.filter((id) => !currentPhotoIds.includes(id)),
+        ...uploadedPhotoIds.current.filter((id) => !currentPhotoIds.includes(id)),
+      ]));
+      persistedPhotoIds.current = currentPhotoIds;
       setSelectedQuoteId(String(saved.id));
-      setStorageStatus("Draft saved");
+      const photosDeleted = await tryDeleteStoredPhotos(removedPhotoIds);
+      uploadedPhotoIds.current = photosDeleted ? [] : removedPhotoIds;
+      setStorageStatus(photosDeleted ? "Draft saved" : "Draft saved, but one or more removed photos could not be deleted.");
       try {
         await refreshSavedQuotes();
       } catch {
-        setStorageStatus("Draft saved, but quote history could not be refreshed.");
+        setStorageStatus(photosDeleted
+          ? "Draft saved, but quote history could not be refreshed."
+          : "Draft saved, but one or more removed photos could not be deleted and quote history could not be refreshed.");
       }
     } catch (error) {
       setStorageStatus(error instanceof Error ? error.message : "Could not save quote");
@@ -433,13 +574,20 @@ export default function QuoteBuilder() {
       setStorageStatus(saved.error || "Could not load quote");
       return;
     }
+    const lines = saved.quote_data.lines.map((line: Partial<QuoteLine>) => ({ ...emptyLine(), ...line }));
+    const unsavedPhotoIds = uploadedPhotoIds.current.filter((photoId) => !persistedPhotoIds.current.includes(photoId));
+    const unsavedPhotosDeleted = await tryDeleteStoredPhotos(unsavedPhotoIds);
+    uploadedPhotoIds.current = unsavedPhotosDeleted ? [] : unsavedPhotoIds;
+    persistedPhotoIds.current = quotePhotoIds({ ...saved.quote_data, lines });
     setQuote((current) => ({
       ...current,
       ...saved.quote_data,
-      lines: saved.quote_data.lines.map((line: Partial<QuoteLine>) => ({ ...emptyLine(), ...line })),
+      lines,
     }));
     setSelectedQuoteId(id);
-    setStorageStatus("Draft loaded");
+    setStorageStatus(unsavedPhotosDeleted
+      ? "Draft loaded"
+      : "Draft loaded, but one or more unsaved photos could not be deleted.");
   }
 
   async function deleteQuote() {
@@ -450,11 +598,21 @@ export default function QuoteBuilder() {
       setStorageStatus(error.error || "Could not delete quote");
       return;
     }
+    const photosToDelete = [
+      ...persistedPhotoIds.current,
+      ...quotePhotoIds(quote),
+      ...uploadedPhotoIds.current,
+    ];
+    const photosDeleted = await tryDeleteStoredPhotos(photosToDelete);
+    uploadedPhotoIds.current = photosDeleted ? [] : Array.from(new Set(photosToDelete));
     setSavedQuotes((current) => current.filter((saved) => String(saved.id) !== selectedQuoteId));
     setSelectedQuoteId("");
     setQuote(emptyQuote());
+    persistedPhotoIds.current = [];
     clearSuggestionSearch();
-    setStorageStatus("Draft deleted");
+    setStorageStatus(photosDeleted
+      ? "Draft deleted"
+      : "Draft deleted, but one or more associated photos could not be deleted.");
   }
 
   function download(format: "xlsx" | "pdf") {
@@ -472,14 +630,14 @@ export default function QuoteBuilder() {
             <h1 className="font-headline text-2xl font-extrabold">Quote Builder</h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => setShowHistory(true)}>Quote history</button>
+            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low disabled:opacity-50" onClick={() => setShowHistory(true)} disabled={uploadingLineId !== null}>Quote history</button>
             <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowImport(true); setImportPreview(null); }}>Import Excel</button>
             <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowOneDrive(true); setFolderTrail([]); setOneDriveFolders([]); void loadOneDriveFolder(); }}>Save to OneDrive</button>
-            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { if (!window.confirm("Start a new quote? Unsaved changes will be lost.")) return; setSelectedQuoteId(""); setQuote(emptyQuote()); clearSuggestionSearch(); setStorageStatus("New quote started."); }}>New quote</button>
-            <button type="button" className="primary-gradient text-on-primary px-4 py-2 rounded-full text-sm font-bold" onClick={saveQuote} disabled={saving}>
-              {saving ? "Saving..." : selectedQuoteId ? "Update draft" : "Save draft"}
+            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low disabled:opacity-50" onClick={() => { void startNewQuote(); }} disabled={uploadingLineId !== null}>New quote</button>
+            <button type="button" className="primary-gradient text-on-primary px-4 py-2 rounded-full text-sm font-bold" onClick={saveQuote} disabled={saving || uploadingLineId !== null}>
+              {uploadingLineId !== null ? "Uploading photo…" : saving ? "Saving..." : selectedQuoteId ? "Update draft" : "Save draft"}
             </button>
-            {selectedQuoteId && <button type="button" className="text-error text-sm font-semibold" onClick={deleteQuote}>Delete</button>}
+            {selectedQuoteId && <button type="button" className="text-error text-sm font-semibold disabled:opacity-50" onClick={deleteQuote} disabled={uploadingLineId !== null}>Delete</button>}
             <Link href="/employee" className="text-sm font-semibold text-on-surface-variant hover:text-primary">Back to portal</Link>
           </div>
         </div>
@@ -515,7 +673,7 @@ export default function QuoteBuilder() {
                 const lineAI = aiRecommendations.filter((item) => item.lineIndex === index);
                 const fieldClass = "mt-1.5 w-full min-w-0 rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
                 const labelClass = "block min-w-0 text-xs font-semibold text-on-surface-variant";
-                return <article key={index} className="min-w-0 overflow-hidden rounded-2xl border border-outline-variant/25 bg-white shadow-sm">
+                return <article key={line.id} className="min-w-0 overflow-hidden rounded-2xl border border-outline-variant/25 bg-white shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/15 bg-surface-container-low/60 px-4 py-3 sm:px-5">
                     <div className="flex min-w-0 flex-wrap items-center gap-3">
                       <span className="rounded-full bg-primary/[0.08] px-3 py-1 text-xs font-bold text-primary">LINE {String(index + 1).padStart(2, "0")}</span>
@@ -530,9 +688,52 @@ export default function QuoteBuilder() {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right"><span className="block text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Line sell total</span><strong className="font-headline text-lg text-primary">{row ? money(row.sellTotal) : money(0)}</strong></div>
-                      <button type="button" aria-label={`Remove estimate line ${index + 1}`} className="rounded-full px-3 py-2 text-xs font-bold text-error hover:bg-error/5" onClick={() => { clearSuggestionSearch(); updateQuote("lines", quote.lines.filter((_, lineIndex) => lineIndex !== index)); }}>Remove</button>
+                      <button type="button" aria-label={`Remove estimate line ${index + 1}`} className="rounded-full px-3 py-2 text-xs font-bold text-error hover:bg-error/5 disabled:opacity-50" disabled={uploadingLineId === line.id} onClick={() => { void removeEstimateLine(line); }}>Remove</button>
                     </div>
                   </div>
+
+                  <section className="border-b border-outline-variant/15 px-4 py-4 sm:px-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-on-surface">Line photos <span className="font-normal text-on-surface-variant">({line.photoIds.length}/{maxLinePhotos})</span></h3>
+                        <p className="mt-0.5 text-xs text-on-surface-variant">Add site or fixture photos for this estimate line. Photos are saved with the draft.</p>
+                      </div>
+                      <label className={`inline-flex cursor-pointer items-center rounded-full border border-outline-variant/40 px-3.5 py-2 text-xs font-bold text-primary transition hover:bg-primary/[0.05] ${uploadingLineId !== null || line.photoIds.length >= maxLinePhotos ? "pointer-events-none opacity-50" : ""}`}>
+                        {uploadingLineId === line.id ? "Preparing photos…" : "Upload photos"}
+                        <input
+                          className="sr-only"
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={uploadingLineId !== null || line.photoIds.length >= maxLinePhotos}
+                          onChange={(event) => {
+                            void uploadLinePhotos(line.id, event.currentTarget.files);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {line.photoIds.length > 0 && <div className="mt-3 flex flex-wrap gap-3">
+                      {line.photoIds.map((photoId, photoIndex) => <figure key={photoId} className="relative">
+                        <Image
+                          src={`/api/quote/photos/${photoId}`}
+                          alt={`Estimate line ${index + 1} photo ${photoIndex + 1}`}
+                          width={160}
+                          height={120}
+                          unoptimized
+                          className="h-24 w-32 rounded-lg border border-outline-variant/20 object-cover"
+                        />
+                        <button
+                          type="button"
+                          className="mt-1 text-xs font-semibold text-error underline disabled:opacity-50"
+                          disabled={uploadingLineId !== null}
+                          onClick={() => { void removeLinePhoto(line.id, photoId); }}
+                        >
+                          Remove photo
+                        </button>
+                      </figure>)}
+                    </div>}
+                  </section>
 
                   <div className="grid min-w-0 grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2">
                     <section className="min-w-0 rounded-xl border border-outline-variant/15 bg-surface-container-low/30 p-4">
@@ -547,7 +748,7 @@ export default function QuoteBuilder() {
                         <label className={labelClass}>Existing watts<input className={fieldClass} value={line.existingWatts} onChange={(event) => updateLine(index, "existingWatts", event.target.value)} placeholder="e.g. 150W" /></label>
                         <label className={labelClass}>Existing quantity<input type="number" min="0" className={fieldClass} value={line.existingQty || ""} onChange={(event) => updateLine(index, "existingQty", numberValue(event.target.value))} placeholder="0" /></label>
                       </div>
-                      <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant">Enter at least 3 characters for prior proposal and Warehouse matches.</p>
+                      <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant">Enter at least 3 characters, then select a prior proposal or Warehouse match to apply it.</p>
                       {suggestions && <div className="mt-3 max-h-72 space-y-3 overflow-y-auto rounded-xl border border-outline-variant/20 bg-white p-3">
                         {suggestions.loading ? <p className="text-xs text-on-surface-variant">Searching proposal history and Warehouse pricing…</p> : suggestions.result ? <>
                           {suggestions.result.history.length > 0 && <div><h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Prior proposals</h4><div className="space-y-2">{suggestions.result.history.map((item, suggestionIndex) => <button key={`${item.description}-${suggestionIndex}`} type="button" className="block w-full rounded-lg border border-outline-variant/20 p-2.5 text-left transition hover:border-primary/50 hover:bg-primary/[0.04]" onClick={() => applyHistorySuggestion(index, item)}><span className="block break-words text-sm font-semibold">{item.description}</span><span className="mt-1 block text-xs text-on-surface-variant">{item.priorUseCount} prior use{item.priorUseCount === 1 ? "" : "s"}{item.watts ? ` · ${item.watts}` : ""}{item.latestCost && item.latestCost > 0 ? ` · ${money(item.latestCost)} recorded cost` : ""}</span></button>)}</div></div>}
@@ -631,14 +832,14 @@ export default function QuoteBuilder() {
       {showImport && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setShowImport(false); setImportPreview(null); } }}>
         <section role="dialog" aria-modal="true" aria-labelledby="quote-import-title" className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl">
           <div className="flex items-center justify-between border-b border-outline-variant/20 px-6 py-4">
-            <div><h2 id="quote-import-title" className="font-headline text-xl font-bold">Import past proposal Excel</h2><p className="text-sm text-on-surface-variant">Review detected fixture pairs before adding them to company suggestion history.</p></div>
+            <div><h2 id="quote-import-title" className="font-headline text-xl font-bold">Import proposal history</h2><p className="text-sm text-on-surface-variant">Review detected fixture pairs before adding them to company suggestions. This does not create saved quotes in Quote history.</p></div>
             <button type="button" className="rounded-full px-3 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowImport(false); setImportPreview(null); }}>Close</button>
           </div>
           <div className="max-h-[72vh] space-y-4 overflow-y-auto p-6">
-            <input ref={importInput} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void previewImport(file); }} />
+            <input ref={importInput} type="file" accept=".xlsx,.xls,.xlsm,.csv" className="hidden" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void previewImport(file); }} />
             <button type="button" className={`w-full rounded-2xl border-2 border-dashed p-8 text-center transition ${draggingFile ? "border-primary bg-primary/[0.06]" : "border-outline-variant/40 hover:border-primary/50"}`} onClick={() => importInput.current?.click()} onDragOver={(event) => { event.preventDefault(); setDraggingFile(true); }} onDragLeave={() => setDraggingFile(false)} onDrop={(event) => { event.preventDefault(); setDraggingFile(false); const file = event.dataTransfer.files.item(0); if (file) void previewImport(file); }}>
               <span className="block font-semibold">{importBusy ? "Reading or importing workbook…" : "Drop an Excel or CSV file here, or click to browse"}</span>
-              <span className="mt-1 block text-xs text-on-surface-variant">Up to 4 MB. Sheets need columns for an existing fixture and its proposed or replacement fixture.</span>
+              <span className="mt-1 block text-xs text-on-surface-variant">Supports .xlsx, .xls, .xlsm, and .csv files up to 4 MB. Sheets need columns for an existing fixture and its proposed or replacement fixture.</span>
             </button>
             {importPreview && <>
               <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4 text-sm">

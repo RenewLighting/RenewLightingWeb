@@ -115,6 +115,8 @@ USD vendor quote when available. Suggestions are opt-in; employees must review t
 fixture and cost, and quote exports retain the internal price basis in Excel.
 Warehouse access is proxied server-side using the existing employee session and
 `WAREHOUSE_PROXY_SECRET`; the secret and signed token are never sent to browser code.
+Each estimate line can include up to three site or fixture photos. Images are resized
+and stored in the quote database, and only the owning Renew employee can view or delete them.
 
 The **AI suggestions** action uses Claude to rank only the historical proposal and
 Warehouse catalog candidates retrieved for the existing fixture lines. It can fill
@@ -130,12 +132,15 @@ If the key is absent, AI suggestions report that configuration is required; exis
 non-AI historical and Warehouse suggestions remain available.
 
 The Quote history dialog lists saved quotes by status and date, and supports loading
-older entries in pages. Use **Import Excel** to drop or select `.xlsx`, `.xls`, or
-`.csv` proposal workbooks. The import preview recognizes existing-fixture and
-proposed/replacement-fixture columns, with optional watts, unit cost, and quote date.
-Employees review the detected rows before importing; uploaded records are available
-to employee fixture suggestions. Re-uploading the same workbook does not duplicate
-its rows. Imported prices are historical references, not current vendor pricing.
+older entries in pages. Use **Import Excel** to drop or select `.xlsx`, `.xls`,
+`.xlsm`, or `.csv` proposal workbooks. The import preview recognizes existing-fixture
+and proposed/replacement-fixture columns, with optional watts, unit cost, and quote
+date. Employees review the detected rows before importing; uploaded records become
+fixture suggestions, not saved quotes, and do not appear in Quote history. To use an
+imported suggestion, enter the matching existing fixture description on an estimate
+line and select a prior proposal match. Re-uploading the same workbook does not
+duplicate its rows. Imported prices are historical references, not current vendor
+pricing.
 Generated internal Excel workbooks include the existing fixture and unit product
 cost columns to make future imports easier.
 
