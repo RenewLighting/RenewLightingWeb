@@ -1,5 +1,5 @@
 import Image from "next/image";
-
+//This component represents the "About" section of the website, highlighting the company's experience and values.
 export default function About() {
     return (
         <section className="py-16 sm:py-24 md:py-32 bg-surface overflow-hidden" id="about">
