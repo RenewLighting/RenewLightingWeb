@@ -7,6 +7,9 @@ import Image from "next/image";
 import Icon from "@/components/Icon";
 import { calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
 import type { WarehouseQuoteSuggestion } from "@/lib/warehouse-quote-suggestions";
+import type { WorkbookPhoto } from "@/lib/quote-workbook-import";
+
+const maxQuoteWorkbookSize = 100 * 1024 * 1024;
 
 function numberValue(value: string) {
   const parsed = Number(value);
@@ -32,12 +35,20 @@ type ImportedLine = {
 };
 
 type ImportPreview = {
+  kind: "quote" | "suggestions";
   fileHash: string;
   fileName: string;
   sheetName: string;
   records: ImportedLine[];
   skippedRows: number;
   maxRecordsReached: boolean;
+  quote?: Quote;
+  photoCount?: number;
+  skippedPhotos?: number;
+};
+
+type QuoteHistoryEntry = SavedQuote & {
+  quote_data: Quote;
 };
 
 type OneDriveFolder = {
@@ -88,6 +99,129 @@ function quotePhotoIds(quote: Quote) {
   return Array.from(new Set(quote.lines.flatMap((line) => line.photoIds)));
 }
 
+function QuoteHistoryDetails({
+  saved,
+  onBack,
+  onEdit,
+}: {
+  saved: QuoteHistoryEntry;
+  onBack: () => void;
+  onEdit: () => void;
+}) {
+  const quote: Quote = {
+    ...emptyQuote(),
+    ...saved.quote_data,
+    lines: (saved.quote_data.lines || []).map((line) => ({
+      ...emptyLine(),
+      ...line,
+      photoIds: Array.isArray(line.photoIds) ? line.photoIds : [],
+    })),
+  };
+  const totals = calculateQuote(quote);
+  const formulaRows = [
+    ["Product tax", `Unit product cost × quantity × ${(quote.taxRate * 100).toFixed(2)}%`],
+    ["Product sell", "Taxed product cost ÷ (1 − product margin)"],
+    ["Labor sell", "Unit labor cost × quantity ÷ (1 − labor margin)"],
+    ["Line sell", quote.pricingModel === "estimate_audit"
+      ? "Product sell + labor sell + allocated project costs"
+      : "Product sell + labor sell"],
+    ["Project costs", quote.pricingModel === "estimate_audit"
+      ? "Shipping, travel, and miscellaneous are allocated evenly across positive product/labor sell components"
+      : "Shipping + travel + miscellaneous + contingency"],
+  ];
+
+  return <div className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <button type="button" className="text-sm font-semibold text-primary underline" onClick={onBack}>Back to quote history</button>
+        <h3 className="mt-2 font-headline text-xl font-bold">{quote.projectName || `Quote #${saved.id}`}</h3>
+        <p className="mt-1 text-xs text-on-surface-variant">{saved.status} · Created {new Date(saved.created_at).toLocaleDateString()} · Updated {new Date(saved.updated_at).toLocaleDateString()}</p>
+        {quote.address && <p className="mt-1 text-sm text-on-surface-variant">{quote.address}</p>}
+      </div>
+      <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={onEdit}>Open in quote builder</button>
+    </div>
+
+    <section className="rounded-xl border border-outline-variant/20 p-4">
+      <h4 className="font-headline font-bold">Formula settings</h4>
+      <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+        <p>Product tax: <strong>{(quote.taxRate * 100).toFixed(2)}%</strong></p>
+        <p>Product margin: <strong>{(quote.productMarkup * 100).toFixed(2)}%</strong></p>
+        <p>Labor margin: <strong>{(quote.laborMargin * 100).toFixed(2)}%</strong></p>
+        <p>Contingency: <strong>{(quote.contingency * 100).toFixed(2)}%</strong></p>
+      </div>
+      <div className="mt-4 grid gap-2 text-xs text-on-surface-variant sm:grid-cols-2">
+        {formulaRows.map(([label, formula]) => <p key={label}><strong className="text-on-surface">{label}:</strong> {formula}</p>)}
+      </div>
+    </section>
+
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {[
+        ["Product cost (with tax)", totals.productCost],
+        ["Labor cost", totals.laborCost],
+        ["Direct cost", totals.directCost],
+        ["Contingency", totals.contingency],
+        ["Shipping", quote.shipping],
+        ["Travel", quote.travel],
+        ["Miscellaneous", quote.miscellaneous],
+        ["Sell total", totals.sellTotal],
+        ["Estimated profit", totals.profit],
+      ].map(([label, amount]) => <div key={label} className="rounded-xl bg-surface-container-low p-3 text-sm">
+        <span className="block text-xs text-on-surface-variant">{label}</span>
+        <strong className="mt-1 block">{money(Number(amount))}</strong>
+      </div>)}
+      <div className="rounded-xl bg-surface-container-low p-3 text-sm">
+        <span className="block text-xs text-on-surface-variant">Estimated margin</span>
+        <strong className="mt-1 block">{(totals.margin * 100).toFixed(2)}%</strong>
+      </div>
+    </section>
+
+    <section className="space-y-3">
+      <h4 className="font-headline font-bold">Estimate lines ({quote.lines.length})</h4>
+      {quote.lines.map((line, index) => {
+        const row = totals.rows.find((item) => item.line.id === line.id);
+        return <article key={line.id} className="rounded-xl border border-outline-variant/20 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-primary">Line {index + 1}{line.fixtureId ? ` · ${line.fixtureId}` : ""}{line.location ? ` · ${line.location}` : ""}</p>
+              <h5 className="mt-1 font-semibold">{line.proposedDescription || "Proposed fixture not specified"}</h5>
+              <p className="mt-1 text-sm text-on-surface-variant">Existing: {line.existingDescription || "Not specified"}{line.existingWatts ? ` · ${line.existingWatts}` : ""} · Qty {line.existingQty}</p>
+              <p className="text-sm text-on-surface-variant">Proposed: {line.proposedWatts || "Watts not specified"} · Qty {line.proposedQty}{line.height ? ` · Height ${line.height}` : ""}</p>
+              {line.installNotes && <p className="mt-2 whitespace-pre-wrap text-sm">{line.installNotes}</p>}
+            </div>
+            <p className="text-right text-sm"><span className="block text-xs text-on-surface-variant">Line sell</span><strong className="text-lg text-primary">{money(row?.sellTotal ?? 0)}</strong></p>
+          </div>
+          <div className="mt-3 grid gap-2 border-t border-outline-variant/15 pt-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+            <p>Product unit: <strong>{money(line.productCost)}</strong></p>
+            <p>Product subtotal: <strong>{money(row?.productSubtotal ?? 0)}</strong></p>
+            <p>Product tax: <strong>{money(row?.productTax ?? 0)}</strong></p>
+            <p>Product with tax: <strong>{money(row?.productTotal ?? 0)}</strong></p>
+            <p>Labor unit: <strong>{money(line.laborCost)}</strong></p>
+            <p>Labor total: <strong>{money(row?.laborTotal ?? 0)}</strong></p>
+            <p>Product sell: <strong>{money(row?.productSell ?? 0)}</strong></p>
+            <p>Labor sell: <strong>{money(row?.laborSell ?? 0)}</strong></p>
+            {quote.pricingModel === "estimate_audit" && <p>Allocated project costs: <strong>{money(row?.projectCostAllocation ?? 0)}</strong></p>}
+            <p>Tax formula: <strong>{((row?.taxRate ?? quote.taxRate) * 100).toFixed(2)}%</strong></p>
+            <p>Product margin formula: <strong>{((row?.productMarkup ?? quote.productMarkup) * 100).toFixed(2)}%</strong></p>
+            <p>Labor margin formula: <strong>{((row?.laborMargin ?? quote.laborMargin) * 100).toFixed(2)}%</strong></p>
+          </div>
+          {line.photoIds.length > 0 && <div className="mt-3 flex flex-wrap gap-3">
+            {line.photoIds.map((photoId, photoIndex) => <a key={photoId} href={`/api/quote/photos/${photoId}`} target="_blank" rel="noreferrer" className="block">
+              <Image
+                src={`/api/quote/photos/${photoId}`}
+                alt={`Quote line ${index + 1} photo ${photoIndex + 1}`}
+                width={240}
+                height={180}
+                unoptimized
+                className="h-36 w-48 rounded-lg border border-outline-variant/20 object-cover"
+              />
+            </a>)}
+          </div>}
+        </article>;
+      })}
+    </section>
+  </div>;
+}
+
 async function compressQuotePhoto(file: File) {
   if (!file.type.startsWith("image/")) throw new Error(`${file.name} is not an image.`);
   if (file.size > 15 * 1024 * 1024) throw new Error(`${file.name} is larger than the 15 MB upload limit.`);
@@ -114,6 +248,19 @@ async function compressQuotePhoto(file: File) {
   }
 }
 
+async function hashWorkbook(bytes: ArrayBuffer) {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function deleteImportedPhotoUploads(photoIds: string[]) {
+  const results = await Promise.allSettled(photoIds.map((id) =>
+    fetch(`/api/quote/photos/${id}`, { method: "DELETE" }),
+  ));
+  return results.every((result) => result.status === "fulfilled"
+    && (result.value.ok || result.value.status === 404));
+}
+
 export default function QuoteBuilder() {
   const [quote, setQuote] = useState<Quote>(emptyQuote);
   const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([]);
@@ -126,6 +273,8 @@ export default function QuoteBuilder() {
   const [showImport, setShowImport] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [historyDetails, setHistoryDetails] = useState<QuoteHistoryEntry | null>(null);
+  const [historyDetailsLoading, setHistoryDetailsLoading] = useState(false);
   const [showOneDrive, setShowOneDrive] = useState(false);
   const [oneDriveBusy, setOneDriveBusy] = useState(false);
   const [folderLoading, setFolderLoading] = useState(false);
@@ -143,13 +292,22 @@ export default function QuoteBuilder() {
   const suggestionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggestionController = useRef<AbortController | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
+  const importFile = useRef<File | null>(null);
+  const importPhotos = useRef<WorkbookPhoto[]>([]);
   const totals = calculateQuote(quote);
+  const importQuoteTotals = importPreview?.quote ? calculateQuote(importPreview.quote) : null;
 
   function clearSuggestionSearch() {
     suggestionRequest.current += 1;
     if (suggestionTimer.current) clearTimeout(suggestionTimer.current);
     suggestionController.current?.abort();
     setSuggestionState(null);
+  }
+
+  function resetImportPreview() {
+    setImportPreview(null);
+    importFile.current = null;
+    importPhotos.current = [];
   }
 
   useEffect(() => {
@@ -186,10 +344,60 @@ export default function QuoteBuilder() {
     }
   }
 
+  async function viewQuoteHistoryDetails(id: string) {
+    setHistoryDetailsLoading(true);
+    setHistoryDetails(null);
+    try {
+      const response = await fetch(`/api/quotes/${id}`, { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not open quote details");
+      setHistoryDetails(result as QuoteHistoryEntry);
+    } catch (error) {
+      setStorageStatus(error instanceof Error ? error.message : "Could not open quote details");
+    } finally {
+      setHistoryDetailsLoading(false);
+    }
+  }
+
   async function previewImport(file: File) {
     setImportBusy(true);
     setImportPreview(null);
+    importPhotos.current = [];
+    importFile.current = file;
     try {
+      if (/\.(xlsx|xls|xlsm)$/i.test(file.name)) {
+        if (file.size > maxQuoteWorkbookSize) {
+          throw new Error("Excel quote workbooks must be 100 MB or smaller.");
+        }
+        const arrayBuffer = await file.arrayBuffer();
+        const workbookBytes = new Uint8Array(arrayBuffer);
+        const { parseQuoteWorkbook } = await import("@/lib/quote-workbook-import");
+        const quoteImport = parseQuoteWorkbook(workbookBytes, file.name);
+        if (quoteImport.recognized) {
+          if (!quoteImport.quote) {
+            throw new Error("This workbook contains only a blank quote template; no quote history was created.");
+          }
+          const fileHash = await hashWorkbook(arrayBuffer);
+          importPhotos.current = quoteImport.photos;
+          setImportPreview({
+            kind: "quote",
+            fileHash,
+            fileName: file.name.slice(0, 200),
+            sheetName: quoteImport.sheetName,
+            quote: quoteImport.quote,
+            records: [],
+            skippedRows: 0,
+            maxRecordsReached: false,
+            photoCount: quoteImport.photos.length,
+            skippedPhotos: quoteImport.skippedPhotos,
+          });
+          return;
+        }
+        if (file.size > 4 * 1024 * 1024) {
+          throw new Error("This workbook is not a recognized quote template and is too large for fixture-suggestion import. Use a completed Renew quote template.");
+        }
+      }
+
       const form = new FormData();
       form.set("file", file);
       const response = await fetch("/api/quote/import", { method: "POST", body: form });
@@ -206,19 +414,73 @@ export default function QuoteBuilder() {
   async function commitImport() {
     if (!importPreview) return;
     setImportBusy(true);
+    const uploadedPhotoIds: string[] = [];
     try {
-      const response = await fetch("/api/quote/import", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(importPreview),
-      });
+      let requestBody: BodyInit;
+      const headers: Record<string, string> = {};
+      if (importPreview.kind === "quote") {
+        if (!importFile.current || !importPreview.quote) {
+          throw new Error("Choose the workbook again before importing this quote.");
+        }
+        const quote = structuredClone(importPreview.quote);
+        for (const [index, photo] of importPhotos.current.entries()) {
+          const line = quote.lines[photo.lineIndex];
+          if (!line) throw new Error(`Embedded photo ${index + 1} is not associated with a quote line.`);
+          setStorageStatus(`Preparing embedded photo ${index + 1} of ${importPhotos.current.length}…`);
+          const imageBuffer = new Uint8Array(photo.imageData.byteLength);
+          imageBuffer.set(photo.imageData);
+          const imageFile = new File([imageBuffer.buffer], `quote-photo-${index + 1}`, { type: photo.contentType });
+          const compressedPhoto = await compressQuotePhoto(imageFile);
+          const photoForm = new FormData();
+          photoForm.set("photo", compressedPhoto, `quote-photo-${index + 1}.jpg`);
+          const photoResponse = await fetch("/api/quote/photos", { method: "POST", body: photoForm });
+          const photoResult = await photoResponse.json().catch(() => null);
+          if (!photoResponse.ok || typeof photoResult?.id !== "string") {
+            throw new Error(photoResult?.error || `Could not save embedded photo ${index + 1}.`);
+          }
+          uploadedPhotoIds.push(photoResult.id);
+          line.photoIds.push(photoResult.id);
+        }
+        headers["Content-Type"] = "application/json";
+        requestBody = JSON.stringify({
+          kind: "quote",
+          fileHash: importPreview.fileHash,
+          fileName: importPreview.fileName,
+          quote,
+          skippedPhotos: importPreview.skippedPhotos || 0,
+        });
+      } else {
+        headers["Content-Type"] = "application/json";
+        requestBody = JSON.stringify(importPreview);
+      }
+      const response = await fetch("/api/quote/import", { method: "PUT", headers, body: requestBody });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not import quote history");
-      setStorageStatus(`${result.imported} historical line${result.imported === 1 ? "" : "s"} added to fixture suggestions${result.duplicates ? `; ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped` : ""}. Enter an existing fixture description and choose a prior proposal match to use it. Imported lines do not appear in Quote history.`);
-      setImportPreview(null);
+      if (importPreview.kind === "quote") {
+        if (result.imported) {
+          setStorageStatus(`Imported quote saved to Quote history with ${result.lines} line${result.lines === 1 ? "" : "s"} and ${result.photos} photo${result.photos === 1 ? "" : "s"}${result.skippedPhotos ? `; ${result.skippedPhotos} unsupported or oversized photo${result.skippedPhotos === 1 ? "" : "s"} skipped` : ""}.`);
+          try {
+            await refreshSavedQuotes();
+          } catch {
+            setStorageStatus("Quote imported successfully, but Quote history could not be refreshed. Close and reopen the history dialog.");
+          }
+        } else {
+          if (uploadedPhotoIds.length && !(await deleteImportedPhotoUploads(uploadedPhotoIds))) {
+            throw new Error("This workbook was already imported, but temporary photos could not be cleaned up.");
+          }
+          setStorageStatus("This workbook was already imported. Its quote is in Quote history.");
+        }
+      } else {
+        setStorageStatus(`${result.imported} historical line${result.imported === 1 ? "" : "s"} added to fixture suggestions${result.duplicates ? `; ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped` : ""}. Enter an existing fixture description and choose a prior proposal match to use it. Imported lines do not appear in Quote history.`);
+      }
+      resetImportPreview();
       setShowImport(false);
     } catch (error) {
-      setStorageStatus(error instanceof Error ? error.message : "Could not import quote history");
+      let message = error instanceof Error ? error.message : "Could not import quote history";
+      if (uploadedPhotoIds.length && !(await deleteImportedPhotoUploads(uploadedPhotoIds))) {
+          message += " Some temporary photos could not be cleaned up.";
+      }
+      setStorageStatus(message);
     } finally {
       setImportBusy(false);
     }
@@ -630,8 +892,8 @@ export default function QuoteBuilder() {
             <h1 className="font-headline text-2xl font-extrabold">Quote Builder</h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low disabled:opacity-50" onClick={() => setShowHistory(true)} disabled={uploadingLineId !== null}>Quote history</button>
-            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowImport(true); setImportPreview(null); }}>Import Excel</button>
+            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low disabled:opacity-50" onClick={() => { setHistoryDetails(null); setShowHistory(true); }} disabled={uploadingLineId !== null}>Quote history</button>
+            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowImport(true); resetImportPreview(); }}>Import Excel</button>
             <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowOneDrive(true); setFolderTrail([]); setOneDriveFolders([]); void loadOneDriveFolder(); }}>Save to OneDrive</button>
             <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low disabled:opacity-50" onClick={() => { void startNewQuote(); }} disabled={uploadingLineId !== null}>New quote</button>
             <button type="button" className="primary-gradient text-on-primary px-4 py-2 rounded-full text-sm font-bold" onClick={saveQuote} disabled={saving || uploadingLineId !== null}>
@@ -813,39 +1075,82 @@ export default function QuoteBuilder() {
         </div>
       </div>
 
-      {showHistory && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowHistory(false); }}>
-        <section role="dialog" aria-modal="true" aria-labelledby="quote-history-title" className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl">
+      {showHistory && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setShowHistory(false); setHistoryDetails(null); } }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="quote-history-title" className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl">
           <div className="flex items-center justify-between border-b border-outline-variant/20 px-6 py-4">
             <div><h2 id="quote-history-title" className="font-headline text-xl font-bold">Quote history</h2><p className="text-sm text-on-surface-variant">Your saved quotes, newest first.</p></div>
-            <button type="button" className="rounded-full px-3 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => setShowHistory(false)}>Close</button>
+            <button type="button" className="rounded-full px-3 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowHistory(false); setHistoryDetails(null); }}>Close</button>
           </div>
           <div className="max-h-[65vh] overflow-y-auto p-4">
-            {savedQuotes.length ? <div className="space-y-2">{savedQuotes.map((saved) => <div key={saved.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant/20 p-4">
-              <div><h3 className="font-semibold">{saved.project_name || `Quote #${saved.id}`}</h3><p className="mt-1 text-xs text-on-surface-variant">{saved.status} · Created {new Date(saved.created_at).toLocaleDateString()} · Updated {new Date(saved.updated_at).toLocaleDateString()}</p></div>
-              <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { void loadQuote(String(saved.id)); setShowHistory(false); }}>Open quote</button>
-            </div>)}</div> : <p className="p-5 text-sm text-on-surface-variant">No saved quotes yet. Save a draft to start your history.</p>}
-            {hasMoreQuotes && <button type="button" className="mt-4 w-full rounded-xl border border-outline-variant/40 px-4 py-3 text-sm font-semibold hover:bg-surface-container-low" disabled={historyLoading} onClick={loadMoreQuoteHistory}>{historyLoading ? "Loading…" : "Load more quotes"}</button>}
+            {historyDetails ? <QuoteHistoryDetails
+              saved={historyDetails}
+              onBack={() => setHistoryDetails(null)}
+              onEdit={() => { void loadQuote(String(historyDetails.id)); setHistoryDetails(null); setShowHistory(false); }}
+            /> : historyDetailsLoading ? <p className="p-5 text-sm text-on-surface-variant">Loading quote details…</p> : <>
+              {savedQuotes.length ? <div className="space-y-2">{savedQuotes.map((saved) => <div key={saved.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant/20 p-4">
+                <div><h3 className="font-semibold">{saved.project_name || `Quote #${saved.id}`}</h3><p className="mt-1 text-xs text-on-surface-variant">{saved.status} · Created {new Date(saved.created_at).toLocaleDateString()} · Updated {new Date(saved.updated_at).toLocaleDateString()}</p></div>
+                <div className="flex gap-2">
+                  <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { void viewQuoteHistoryDetails(String(saved.id)); }}>View details</button>
+                  <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { void loadQuote(String(saved.id)); setShowHistory(false); }}>Open in builder</button>
+                </div>
+              </div>)}</div> : <p className="p-5 text-sm text-on-surface-variant">No saved quotes yet. Save a draft or import a completed workbook to start your history.</p>}
+              {hasMoreQuotes && <button type="button" className="mt-4 w-full rounded-xl border border-outline-variant/40 px-4 py-3 text-sm font-semibold hover:bg-surface-container-low" disabled={historyLoading} onClick={loadMoreQuoteHistory}>{historyLoading ? "Loading…" : "Load more quotes"}</button>}
+            </>}
           </div>
         </section>
       </div>}
 
-      {showImport && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setShowImport(false); setImportPreview(null); } }}>
+      {showImport && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setShowImport(false); resetImportPreview(); } }}>
         <section role="dialog" aria-modal="true" aria-labelledby="quote-import-title" className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-surface-container-lowest shadow-2xl">
           <div className="flex items-center justify-between border-b border-outline-variant/20 px-6 py-4">
-            <div><h2 id="quote-import-title" className="font-headline text-xl font-bold">Import proposal history</h2><p className="text-sm text-on-surface-variant">Review detected fixture pairs before adding them to company suggestions. This does not create saved quotes in Quote history.</p></div>
-            <button type="button" className="rounded-full px-3 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowImport(false); setImportPreview(null); }}>Close</button>
+            <div><h2 id="quote-import-title" className="font-headline text-xl font-bold">Import quote or proposal history</h2><p className="text-sm text-on-surface-variant">Completed Renew quote workbooks become saved history records; other fixture-pair spreadsheets add prior suggestions.</p></div>
+            <button type="button" className="rounded-full px-3 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowImport(false); resetImportPreview(); }}>Close</button>
           </div>
           <div className="max-h-[72vh] space-y-4 overflow-y-auto p-6">
             <input ref={importInput} type="file" accept=".xlsx,.xls,.xlsm,.csv" className="hidden" onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void previewImport(file); }} />
             <button type="button" className={`w-full rounded-2xl border-2 border-dashed p-8 text-center transition ${draggingFile ? "border-primary bg-primary/[0.06]" : "border-outline-variant/40 hover:border-primary/50"}`} onClick={() => importInput.current?.click()} onDragOver={(event) => { event.preventDefault(); setDraggingFile(true); }} onDragLeave={() => setDraggingFile(false)} onDrop={(event) => { event.preventDefault(); setDraggingFile(false); const file = event.dataTransfer.files.item(0); if (file) void previewImport(file); }}>
               <span className="block font-semibold">{importBusy ? "Reading or importing workbook…" : "Drop an Excel or CSV file here, or click to browse"}</span>
-              <span className="mt-1 block text-xs text-on-surface-variant">Supports .xlsx, .xls, .xlsm, and .csv files up to 4 MB. Sheets need columns for an existing fixture and its proposed or replacement fixture.</span>
+              <span className="mt-1 block text-xs text-on-surface-variant">Supports .xls, .xlsx, and .xlsm quote templates up to 100 MB, including embedded photos. Other Excel/CSV fixture-suggestion files are limited to 4 MB.</span>
             </button>
             {importPreview && <>
               <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4 text-sm">
                 <p className="font-semibold">{importPreview.fileName} · sheet “{importPreview.sheetName}”</p>
-                <p className="mt-1 text-on-surface-variant">{importPreview.records.length} fixture pairs detected{importPreview.skippedRows ? ` · ${importPreview.skippedRows} incomplete rows skipped` : ""}{importPreview.maxRecordsReached ? " · 3,000-row safety limit reached" : ""}. Prices and dates are used when available.</p>
+                {importPreview.kind === "quote" && importPreview.quote
+                  ? <p className="mt-1 text-on-surface-variant">{importPreview.quote.projectName} · {importPreview.quote.lines.length} quote lines · {importPreview.photoCount || 0} embedded photos found{importPreview.skippedPhotos ? ` · ${importPreview.skippedPhotos} unsupported or oversized photos skipped` : ""}. Recalculated using the workbook’s tax and margin formulas.</p>
+                  : <p className="mt-1 text-on-surface-variant">{importPreview.records.length} fixture pairs detected{importPreview.skippedRows ? ` · ${importPreview.skippedRows} incomplete rows skipped` : ""}{importPreview.maxRecordsReached ? " · 3,000-row safety limit reached" : ""}. Prices and dates are used when available.</p>}
               </div>
+              {importPreview.kind === "quote" && importPreview.quote && importQuoteTotals ? <>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <p className="rounded-xl bg-surface-container-low p-3 text-sm">Tax <strong>{(importPreview.quote.taxRate * 100).toFixed(2)}%</strong></p>
+                  <p className="rounded-xl bg-surface-container-low p-3 text-sm">Product margin <strong>{(importPreview.quote.productMarkup * 100).toFixed(2)}%</strong></p>
+                  <p className="rounded-xl bg-surface-container-low p-3 text-sm">Labor margin <strong>{(importPreview.quote.laborMargin * 100).toFixed(2)}%</strong></p>
+                  <p className="rounded-xl bg-surface-container-low p-3 text-sm">Recalculated sell total <strong>{money(importQuoteTotals.sellTotal)}</strong></p>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-outline-variant/20">
+                  <table className="w-full min-w-[1080px] text-left text-sm">
+                    <thead className="bg-surface-container-low text-xs uppercase tracking-wide text-on-surface-variant"><tr><th className="px-3 py-2">Line</th><th className="px-3 py-2">Existing fixture</th><th className="px-3 py-2">Proposed fixture</th><th className="px-3 py-2">Qty</th><th className="px-3 py-2">Product cost</th><th className="px-3 py-2">Labor cost</th><th className="px-3 py-2">Formula rates</th><th className="px-3 py-2">Calculated sell</th></tr></thead>
+                    <tbody>{importPreview.quote.lines.slice(0, 30).map((line, index) => {
+                      const row = importQuoteTotals.rows.find((item) => item.line.id === line.id);
+                      return <tr key={line.id} className="border-t border-outline-variant/15">
+                        <td className="px-3 py-2">{line.fixtureId || index + 1}</td>
+                        <td className="px-3 py-2">{line.existingDescription || "—"}</td>
+                        <td className="px-3 py-2">{line.proposedDescription || "—"}</td>
+                        <td className="px-3 py-2">{line.proposedQty}</td>
+                        <td className="px-3 py-2">{money(line.productCost)}</td>
+                        <td className="px-3 py-2">{money(line.laborCost)}</td>
+                        <td className="px-3 py-2">{((row?.taxRate ?? importPreview.quote?.taxRate ?? 0) * 100).toFixed(2)}% tax · {((row?.productMarkup ?? importPreview.quote?.productMarkup ?? 0) * 100).toFixed(2)}% product · {((row?.laborMargin ?? importPreview.quote?.laborMargin ?? 0) * 100).toFixed(2)}% labor</td>
+                        <td className="px-3 py-2">{money(row?.sellTotal ?? 0)}</td>
+                      </tr>;
+                    })}</tbody>
+                  </table>
+                  {importPreview.quote.lines.length > 30 && <p className="border-t border-outline-variant/15 p-3 text-xs text-on-surface-variant">Showing the first 30 lines. All {importPreview.quote.lines.length} quote lines will be saved.</p>}
+                </div>
+                <p className="text-xs text-on-surface-variant">Importing creates a saved record in Quote history. Uploaded photos are extracted from the workbook and attached to their matching lines. Re-importing the same file will not create a duplicate quote.</p>
+                <div className="flex justify-end gap-3">
+                  <button type="button" className="rounded-full border border-outline-variant/40 px-5 py-2 text-sm font-semibold" onClick={resetImportPreview} disabled={importBusy}>Choose another file</button>
+                  <button type="button" className="primary-gradient rounded-full px-5 py-2 text-sm font-bold text-on-primary" onClick={commitImport} disabled={importBusy}>{importBusy ? "Importing…" : `Save quote with ${importPreview.quote.lines.length} lines`}</button>
+                </div>
+              </> : <>
               <div className="overflow-x-auto rounded-xl border border-outline-variant/20">
                 <table className="w-full min-w-[760px] text-left text-sm">
                   <thead className="bg-surface-container-low text-xs uppercase tracking-wide text-on-surface-variant"><tr><th className="px-3 py-2">Existing fixture</th><th className="px-3 py-2">Proposed fixture</th><th className="px-3 py-2">Watts</th><th className="px-3 py-2">Qty</th><th className="px-3 py-2">Product cost</th><th className="px-3 py-2">Quote date</th></tr></thead>
@@ -855,9 +1160,10 @@ export default function QuoteBuilder() {
               </div>
               <p className="text-xs text-on-surface-variant">Imported records are shared with Renew employees for fixture suggestions. A repeated upload of the same file will not duplicate its rows.</p>
               <div className="flex justify-end gap-3">
-                <button type="button" className="rounded-full border border-outline-variant/40 px-5 py-2 text-sm font-semibold" onClick={() => setImportPreview(null)} disabled={importBusy}>Choose another file</button>
+                <button type="button" className="rounded-full border border-outline-variant/40 px-5 py-2 text-sm font-semibold" onClick={resetImportPreview} disabled={importBusy}>Choose another file</button>
                 <button type="button" className="primary-gradient rounded-full px-5 py-2 text-sm font-bold text-on-primary" onClick={commitImport} disabled={importBusy}>{importBusy ? "Importing…" : `Import ${importPreview.records.length} rows`}</button>
               </div>
+              </>}
             </>}
           </div>
         </section>

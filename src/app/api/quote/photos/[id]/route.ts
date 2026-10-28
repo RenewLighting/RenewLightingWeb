@@ -52,10 +52,31 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     await ensureQuoteTable();
     const result = await db.query(
-      "DELETE FROM quote_line_photos WHERE id = $1 AND owner_email = $2",
+      `DELETE FROM quote_line_photos photo
+       WHERE photo.id = $1 AND photo.owner_email = $2
+         AND NOT EXISTS (
+           SELECT 1
+           FROM quotes quote_record
+           CROSS JOIN LATERAL jsonb_array_elements(
+             CASE
+               WHEN jsonb_typeof(quote_record.quote_data -> 'lines') = 'array'
+               THEN quote_record.quote_data -> 'lines'
+               ELSE '[]'::jsonb
+             END
+           ) AS quote_lines(line_data)
+           WHERE quote_record.owner_email = $2 AND quote_lines.line_data -> 'photoIds' ? $1
+         )
+       RETURNING photo.id`,
       [id, email],
     );
-    if (!result.rowCount) return NextResponse.json({ error: "Photo not found" }, { status: 404 });
+    if (!result.rowCount) {
+      const existing = await db.query(
+        "SELECT id FROM quote_line_photos WHERE id = $1 AND owner_email = $2",
+        [id, email],
+      );
+      if (!existing.rows.length) return NextResponse.json({ error: "Photo not found" }, { status: 404 });
+      return NextResponse.json({ error: "Photo is attached to a saved quote" }, { status: 409 });
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Quote line photo deletion failed:", error);

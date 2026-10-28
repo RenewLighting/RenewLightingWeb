@@ -131,18 +131,23 @@ needed, set `ANTHROPIC_MODEL` to a Claude model enabled for your Anthropic accou
 If the key is absent, AI suggestions report that configuration is required; existing
 non-AI historical and Warehouse suggestions remain available.
 
-The Quote history dialog lists saved quotes by status and date, and supports loading
-older entries in pages. Use **Import Excel** to drop or select `.xlsx`, `.xls`,
-`.xlsm`, or `.csv` proposal workbooks. The import preview recognizes existing-fixture
-and proposed/replacement-fixture columns, with optional watts, unit cost, and quote
-date. Employees review the detected rows before importing; uploaded records become
-fixture suggestions, not saved quotes, and do not appear in Quote history. To use an
-imported suggestion, enter the matching existing fixture description on an estimate
-line and select a prior proposal match. Re-uploading the same workbook does not
-duplicate its rows. Imported prices are historical references, not current vendor
-pricing.
+The Quote history dialog lists saved and imported quotes by status and date, supports
+loading older entries in pages, and can display a quote's formulas, totals, line
+details, and attached photos. Use **Import Excel** to drop or select `.xlsx`, `.xls`,
+`.xlsm`, or `.csv` workbooks. Completed Renew quote templates in Excel formats are
+parsed in the browser, including files up to 100 MB, so large workbooks and embedded
+photos do not have to pass through the serverless request-size limit. Imported photos
+are resized before upload. The importer recognizes supported template variations,
+including a shared `Fixture Qty` column and formula-driven tax and margin columns.
+Completed workbooks are saved as quote-history records with their line costs,
+quantities, pricing settings, and supported embedded photos; totals are recalculated
+using the quote builder formulas.
+Blank templates do not create quote records. Other spreadsheets with existing and
+proposed fixture columns are imported as prior-proposal suggestions instead. Other
+Excel/CSV suggestion imports remain limited to 4 MB. The same workbook cannot be
+imported twice. Imported prices are historical references, not current vendor pricing.
 Generated internal Excel workbooks include the existing fixture and unit product
-cost columns to make future imports easier.
+cost columns to make future suggestions imports easier.
 
 **Save to OneDrive** browses the existing shared quote folder and its subfolders;
 the application does not create folders. To enable it, create a Microsoft Entra

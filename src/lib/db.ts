@@ -22,19 +22,28 @@ export function ensureQuoteTable() {
       id BIGSERIAL PRIMARY KEY,
       owner_email TEXT NOT NULL,
       project_name TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'review', 'approved', 'rejected', 'archived')),
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'review', 'approved', 'rejected', 'archived', 'imported')),
       quote_data JSONB NOT NULL,
+      import_file_hash TEXT,
+      import_file_name TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS import_file_hash TEXT;
+    ALTER TABLE quotes ADD COLUMN IF NOT EXISTS import_file_name TEXT;
+    ALTER TABLE quotes DROP CONSTRAINT IF EXISTS quotes_status_check;
+    ALTER TABLE quotes ADD CONSTRAINT quotes_status_check CHECK (status IN ('draft', 'review', 'approved', 'rejected', 'archived', 'imported'));
     CREATE INDEX IF NOT EXISTS idx_quotes_owner_updated ON quotes(owner_email, updated_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_owner_import_hash ON quotes(owner_email, import_file_hash) WHERE import_file_hash IS NOT NULL;
     CREATE TABLE IF NOT EXISTS quote_line_photos (
       id TEXT PRIMARY KEY,
       owner_email TEXT NOT NULL,
-      content_type TEXT NOT NULL CHECK (content_type = 'image/jpeg'),
+      content_type TEXT NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp')),
       image_data BYTEA NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE quote_line_photos DROP CONSTRAINT IF EXISTS quote_line_photos_content_type_check;
+    ALTER TABLE quote_line_photos ADD CONSTRAINT quote_line_photos_content_type_check CHECK (content_type IN ('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'));
     CREATE INDEX IF NOT EXISTS idx_quote_line_photos_owner_created ON quote_line_photos(owner_email, created_at DESC);
     CREATE TABLE IF NOT EXISTS quote_suggestion_history (
       id BIGSERIAL PRIMARY KEY,
