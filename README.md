@@ -148,6 +148,10 @@ Excel/CSV suggestion imports remain limited to 4 MB. The same workbook cannot be
 imported twice. Imported prices are historical references, not current vendor pricing.
 Generated internal Excel workbooks include the existing fixture and unit product
 cost columns to make future suggestions imports easier.
+**Generate Proposal PDF** creates a branded, paginated customer proposal with a
+project summary, itemized scope and attached photos, inclusions and exclusions,
+and acceptance fields. Payment, schedule, validity, and warranty terms are marked
+for confirmation when the quote does not provide them.
 
 **Save to OneDrive** browses the existing shared quote folder and its subfolders;
 the application does not create folders. To enable it, create a Microsoft Entra
