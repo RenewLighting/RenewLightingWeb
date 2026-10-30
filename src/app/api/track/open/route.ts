@@ -57,7 +57,10 @@ export async function GET(request: Request) {
         from:
           process.env.RESEND_FROM_EMAIL ||
           "Renew Lighting <onboarding@resend.dev>",
-        to: [process.env.CONTACT_EMAIL || "operations@renewlighting.com"],
+        to: [
+          process.env.EMAIL_TRACKING_NOTIFICATION_EMAIL ||
+            "projects@renewlighting.com",
+        ],
         subject: `Email opened: ${payload.subject} (${payload.recipient})`,
         html: `
           <h2>Tracked email was opened</h2>

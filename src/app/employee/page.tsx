@@ -31,6 +31,13 @@ const applications = [
     available: true,
   },
   {
+    name: "Email Open Tracker",
+    description: "Create a reusable Gmail tracking image and get open alerts.",
+    icon: "mail",
+    href: "/email-tracker",
+    available: true,
+  },
+  {
     name: "Project Dashboard",
     description: "Track active projects, schedules, and field progress.",
     icon: "space_dashboard",
