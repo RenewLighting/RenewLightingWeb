@@ -13,6 +13,7 @@ export default function EmailTrackerGenerator() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   async function generatePixel() {
     setLoading(true);
@@ -74,6 +75,48 @@ export default function EmailTrackerGenerator() {
     }
   }
 
+  async function sendTestNotification() {
+    setTesting(true);
+    setError("");
+    setCopied("");
+
+    try {
+      const response = await fetch("/api/track/test", {
+        method: "POST",
+        cache: "no-store",
+      });
+      const result: unknown = await response.json();
+      const message =
+        typeof result === "object" &&
+        result !== null &&
+        "message" in result &&
+        typeof result.message === "string"
+          ? result.message
+          : null;
+
+      if (!response.ok) {
+        const errorMessage =
+          typeof result === "object" &&
+          result !== null &&
+          "error" in result &&
+          typeof result.error === "string"
+            ? result.error
+            : "Could not send the test notification.";
+        throw new Error(errorMessage);
+      }
+
+      setCopied(message ?? "Resend accepted the test email for delivery.");
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not send the test notification.",
+      );
+    } finally {
+      setTesting(false);
+    }
+  }
+
   return (
     <main className="min-h-[100dvh] bg-surface">
       <header className="border-b border-outline-variant/20 bg-surface-container-lowest">
@@ -122,6 +165,14 @@ export default function EmailTrackerGenerator() {
             className="primary-gradient text-on-primary px-6 py-3 rounded-full font-headline font-bold text-sm disabled:opacity-60"
           >
             {loading ? "Generating..." : "Generate tracking image"}
+          </button>
+          <button
+            type="button"
+            onClick={sendTestNotification}
+            disabled={testing}
+            className="ml-3 border border-outline-variant/40 bg-surface-container-lowest text-on-surface px-6 py-3 rounded-full font-headline font-bold text-sm disabled:opacity-60"
+          >
+            {testing ? "Sending test..." : "Send test notification"}
           </button>
 
           {error && (
