@@ -38,7 +38,9 @@ export async function POST() {
     if (error) {
       console.error("Resend error sending email tracking test:", error);
       return NextResponse.json(
-        { error: "Resend rejected the test email. Check the deployment logs." },
+        {
+          error: `Resend rejected the test email: ${error.message} (${error.name})`,
+        },
         { status: 502 },
       );
     }
