@@ -1255,8 +1255,10 @@ export default function QuoteBuilder() {
                         />
                       </div>
                       <label className={`${labelClass} mt-3`}>Proposed fixture type
-                        <input list={`proposed-fixture-types-${line.id}`} className={fieldClass} value={line.proposedFixtureType} onChange={(event) => updateLine(index, "proposedFixtureType", event.target.value)} placeholder="Type or choose a fixture type" />
-                        <datalist id={`proposed-fixture-types-${line.id}`}>{fixtureTypes.map((option) => <option key={option} value={option} />)}</datalist>
+                        <select className={fieldClass} value={line.proposedFixtureType} onChange={(event) => updateLine(index, "proposedFixtureType", event.target.value)}>
+                          <option value="">Select type</option>
+                          {fixtureTypes.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
                       </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Proposed watts<input className={fieldClass} value={line.proposedWatts} onChange={(event) => updateLine(index, "proposedWatts", event.target.value)} placeholder="e.g. 40W" /></label>
