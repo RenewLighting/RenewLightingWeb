@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 
 import { inputWattageEntries, searchInputWattage, wattageReference } from "@/lib/input-wattage";
 import { calculateEnergySavings, calculateQuote, emptyLine, emptyQuote } from "@/lib/quote";
+import { fixtureDescriptionExamples, fixtureTypes, matchFixtureDescriptionExamples } from "@/lib/quote-fixture-options";
 import { conditionIdentifiers, parseConditionCode, parseWorkCodes, workIdentifiers } from "@/lib/quote-identifiers";
 import { createQuoteWorkbook } from "@/lib/quote-workbook";
 import { parseQuoteWorkbook } from "@/lib/quote-workbook-import";
@@ -20,6 +21,15 @@ test("the supplied wattage reference retains all 173 entries, decimals and zero 
   assert.equal(searchInputWattage("Nuclear")[0].watts, 0);
   assert.equal(searchInputWattage("150W Metal Halide")[0].watts, 190);
   assert.equal(searchInputWattage("no-such-fixture").length, 0);
+});
+
+test("fixture description autocomplete provides searchable, editable fixture examples", () => {
+  assert.ok(fixtureDescriptionExamples.length >= 30);
+  assert.ok(fixtureTypes.length >= 30);
+  assert.ok(matchFixtureDescriptionExamples("").length > 0);
+  assert.ok(matchFixtureDescriptionExamples("2x4").includes("2x4 troffer"));
+  assert.ok(matchFixtureDescriptionExamples("LED high bay").includes("LED high-bay fixture"));
+  assert.deepEqual(matchFixtureDescriptionExamples("fixture-does-not-exist"), []);
 });
 
 test("the PNG identifiers stay distinct and reject unknown codes", () => {

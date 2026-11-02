@@ -33,6 +33,54 @@ export const fixtureTypes = [
   "Other / custom",
 ] as const;
 
+export const fixtureDescriptionExamples = [
+  "1x4 troffer",
+  "2x2 troffer",
+  "2x4 troffer",
+  "LED flat panel",
+  "Fluorescent troffer",
+  "Linear strip fixture",
+  "LED wraparound fixture",
+  "LED high-bay fixture",
+  "Metal-halide high-bay fixture",
+  "Low-bay fixture",
+  "Recessed LED downlight",
+  "Track lighting fixture",
+  "Wall sconce",
+  "Vanity fixture",
+  "Undercabinet light",
+  "LED area light",
+  "Metal-halide area light",
+  "LED floodlight",
+  "Wall pack",
+  "Canopy light",
+  "Bollard light",
+  "Landscape light",
+  "Roadway / streetlight",
+  "Parking garage fixture",
+  "Sports lighting fixture",
+  "Tunnel light",
+  "Hazardous-location fixture",
+  "Vaportight fixture",
+  "Pool / spa light",
+  "Exit sign",
+  "Emergency light",
+  "Sign light",
+  "Fluorescent lamp",
+  "LED retrofit kit",
+  "Multifamily common-area fixture",
+  "Lighting control / occupancy sensor",
+] as const;
+
+export function matchFixtureDescriptionExamples(query: string, limit = 8) {
+  const terms = query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const matches = fixtureDescriptionExamples.filter((description) => {
+    const normalized = description.toLowerCase();
+    return terms.every((term) => normalized.includes(term));
+  });
+  return (matches.length ? matches : query.trim() ? [] : [...fixtureDescriptionExamples]).slice(0, limit);
+}
+
 export const lightingTechnologies = [
   "LED",
   "Fluorescent",

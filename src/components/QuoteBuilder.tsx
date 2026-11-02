@@ -5,11 +5,12 @@ import Link from "next/link";
 import Image from "next/image";
 
 import Icon from "@/components/Icon";
+import FixtureAutocomplete, { type FixtureAutocompleteOption } from "@/components/FixtureAutocomplete";
 import InputWattagePicker from "@/components/InputWattagePicker";
 import { wattageReference, type InputWattageEntry } from "@/lib/input-wattage";
 import { calculateEnergySavings, calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
 import { conditionIdentifiers, describeCondition, describeWorkCodes, workIdentifiers, type WorkCode } from "@/lib/quote-identifiers";
-import { colorTemperatureOptions, controlOptions, dimmingOptions, fixtureTypes, lightDistributions, lightingTechnologies, mountingTypes, voltageOptions } from "@/lib/quote-fixture-options";
+import { colorTemperatureOptions, controlOptions, dimmingOptions, fixtureTypes, lightDistributions, lightingTechnologies, matchFixtureDescriptionExamples, mountingTypes, voltageOptions } from "@/lib/quote-fixture-options";
 import type { WarehouseQuoteSuggestion } from "@/lib/warehouse-quote-suggestions";
 import type { WorkbookPhoto } from "@/lib/quote-workbook-import";
 
@@ -64,6 +65,7 @@ type OneDriveFolder = {
 type HistoricalSuggestion = {
   description: string;
   watts: string;
+  fixtureType?: string;
   priorUseCount: number;
   latestCost: number | null;
   latestUpdatedAt: string;
@@ -71,6 +73,8 @@ type HistoricalSuggestion = {
 
 type SuggestionResponse = {
   history: HistoricalSuggestion[];
+  existingFixtures: HistoricalSuggestion[];
+  proposedFixtures: HistoricalSuggestion[];
   warehouse: WarehouseQuoteSuggestion[];
   warehouseAvailable: boolean;
 };
@@ -98,6 +102,22 @@ type AIRecommendation = {
 };
 
 const maxLinePhotos = 3;
+
+function uniqueFixtureAutocompleteOptions(options: FixtureAutocompleteOption[]) {
+  const priority = (group: string) => group.includes("Matching prior") ? 0
+    : group.includes("Suggested replacements") || group.includes("Warehouse") ? 1
+      : 2;
+  const ranked = options.map((option, index) => ({ option, index }))
+    .sort((left, right) => priority(left.option.group) - priority(right.option.group)
+      || left.index - right.index);
+  const seen = new Set<string>();
+  return ranked.flatMap(({ option }) => {
+    const key = option.label.trim().toLocaleLowerCase();
+    if (!key || seen.has(key)) return [];
+    seen.add(key);
+    return [option];
+  });
+}
 
 function quotePhotoIds(quote: Quote) {
   return Array.from(new Set(quote.lines.flatMap((line) => line.photoIds)));
@@ -294,7 +314,7 @@ export default function QuoteBuilder() {
   const [aiBusy, setAiBusy] = useState(false);
   const [uploadingLineId, setUploadingLineId] = useState<string | null>(null);
   const [aiRecommendations, setAiRecommendations] = useState<AIRecommendation[]>([]);
-  const [suggestionState, setSuggestionState] = useState<{ lineIndex: number; query: string; result: SuggestionResponse | null; loading: boolean } | null>(null);
+  const [suggestionState, setSuggestionState] = useState<{ lineIndex: number; field: "existing" | "proposed"; query: string; result: SuggestionResponse | null; loading: boolean } | null>(null);
   const persistedPhotoIds = useRef<string[]>([]);
   const uploadedPhotoIds = useRef<string[]>([]);
   const suggestionRequest = useRef(0);
@@ -651,7 +671,7 @@ export default function QuoteBuilder() {
         existingWattageReference: wattageReference(entry),
       } : line),
     }));
-    searchSuggestions(index, entry.description);
+    searchSuggestions(index, "existing", entry.description);
   }
 
   function toggleWorkCode(index: number, code: WorkCode) {
@@ -756,17 +776,17 @@ export default function QuoteBuilder() {
       : "New quote started, but one or more unsaved photos could not be deleted.");
   }
 
-  function searchSuggestions(lineIndex: number, query: string) {
+  function searchSuggestions(lineIndex: number, field: "existing" | "proposed", query: string) {
     const requestId = ++suggestionRequest.current;
     if (suggestionTimer.current) clearTimeout(suggestionTimer.current);
     suggestionController.current?.abort();
     const normalized = query.trim();
     if (normalized.length < 3) {
-      setSuggestionState(null);
+      setSuggestionState({ lineIndex, field, query: normalized, result: null, loading: false });
       return;
     }
 
-    setSuggestionState({ lineIndex, query: normalized, result: null, loading: true });
+    setSuggestionState({ lineIndex, field, query: normalized, result: null, loading: true });
     suggestionTimer.current = setTimeout(async () => {
       const controller = new AbortController();
       suggestionController.current = controller;
@@ -775,11 +795,11 @@ export default function QuoteBuilder() {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Quote suggestions are unavailable.");
         if (requestId === suggestionRequest.current) {
-          setSuggestionState({ lineIndex, query: normalized, result, loading: false });
+          setSuggestionState({ lineIndex, field, query: normalized, result, loading: false });
         }
       } catch (error) {
         if (controller.signal.aborted || requestId !== suggestionRequest.current) return;
-        setSuggestionState({ lineIndex, query: normalized, result: null, loading: false });
+        setSuggestionState({ lineIndex, field, query: normalized, result: null, loading: false });
         setStorageStatus(error instanceof Error ? error.message : "Quote suggestions are unavailable.");
       }
     }, 250);
@@ -793,6 +813,7 @@ export default function QuoteBuilder() {
       lines: current.lines.map((line, index) => index === lineIndex ? {
         ...line,
         proposedDescription: suggestion.description,
+        proposedFixtureType: line.proposedFixtureType || suggestion.fixtureType || "",
         proposedWatts: suggestion.watts || line.proposedWatts,
         productCost: suggestion.latestCost && suggestion.latestCost > 0 ? suggestion.latestCost : line.productCost,
         productCostSource: suggestion.latestCost && suggestion.latestCost > 0 ? "prior_proposal" : "",
@@ -805,6 +826,21 @@ export default function QuoteBuilder() {
     setStorageStatus("Applied a prior proposal suggestion. Review the fixture and its recorded cost before quoting.");
   }
 
+  function applyExistingFixtureSuggestion(lineIndex: number, suggestion: HistoricalSuggestion) {
+    clearSuggestionSearch();
+    setAiRecommendations([]);
+    setQuote((current) => ({
+      ...current,
+      lines: current.lines.map((line, index) => index === lineIndex ? {
+        ...line,
+        existingDescription: suggestion.description,
+        existingWatts: line.existingWatts || suggestion.watts,
+        existingFixtureType: line.existingFixtureType || suggestion.fixtureType || "",
+        existingWattageReference: "",
+      } : line),
+    }));
+  }
+
   function applyWarehouseSuggestion(lineIndex: number, suggestion: WarehouseQuoteSuggestion) {
     clearSuggestionSearch();
     setAiRecommendations([]);
@@ -815,6 +851,7 @@ export default function QuoteBuilder() {
       lines: current.lines.map((line, index) => index === lineIndex ? {
         ...line,
         proposedDescription: description,
+        proposedFixtureType: line.proposedFixtureType || suggestion.category || "",
         productCost: hasPrice ? Number(suggestion.latest_price) : line.productCost,
         productCostSource: hasPrice ? "warehouse_quote" : "",
         productCostVendor: hasPrice ? suggestion.latest_vendor || "" : "",
@@ -935,64 +972,136 @@ export default function QuoteBuilder() {
   return (
     <main className="min-h-screen bg-surface-container-low">
       <header className="border-b border-outline-variant/20 bg-surface-container-lowest">
-        <div className="max-w-[1500px] mx-auto px-6 lg:px-10 min-h-20 py-3 flex items-center justify-between gap-6">
+        <div className="mx-auto flex min-h-20 max-w-[1500px] flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10">
           <div>
-            <p className="text-primary font-bold tracking-widest uppercase text-xs">Renew Workspace</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary">Renew Workspace</p>
             <h1 className="font-headline text-2xl font-extrabold">Quote Builder</h1>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low disabled:opacity-50" onClick={() => { setHistoryDetails(null); setShowHistory(true); }} disabled={uploadingLineId !== null}>Quote history</button>
-            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowImport(true); resetImportPreview(); }}>Import Excel</button>
-            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low" onClick={() => { setShowOneDrive(true); setFolderTrail([]); setOneDriveFolders([]); void loadOneDriveFolder(); }}>Save to OneDrive</button>
-            <button type="button" className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-semibold hover:bg-surface-container-low disabled:opacity-50" onClick={() => { void startNewQuote(); }} disabled={uploadingLineId !== null}>New quote</button>
-            <button type="button" className="primary-gradient text-on-primary px-4 py-2 rounded-full text-sm font-bold" onClick={saveQuote} disabled={saving || uploadingLineId !== null}>
-              {uploadingLineId !== null ? "Uploading photo…" : saving ? "Saving..." : selectedQuoteId ? "Update draft" : "Save draft"}
+          <div className="flex items-center gap-2">
+            <details className="group relative">
+              <summary className="cursor-pointer rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 text-sm font-semibold text-on-surface transition hover:bg-surface-container-low">More actions</summary>
+              <div className="absolute right-0 z-50 mt-2 flex w-52 flex-col overflow-hidden rounded-xl border border-outline-variant/20 bg-white p-1.5 shadow-xl">
+                <button type="button" className="rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-surface-container-low disabled:opacity-50" onClick={() => { setHistoryDetails(null); setShowHistory(true); }} disabled={uploadingLineId !== null}>Quote history</button>
+                <button type="button" className="rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-surface-container-low" onClick={() => { setShowImport(true); resetImportPreview(); }}>Import Excel</button>
+                <button type="button" className="rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-surface-container-low" onClick={() => { setShowOneDrive(true); setFolderTrail([]); setOneDriveFolders([]); void loadOneDriveFolder(); }}>Save to OneDrive</button>
+                <button type="button" className="rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-surface-container-low disabled:opacity-50" onClick={() => { void startNewQuote(); }} disabled={uploadingLineId !== null}>New quote</button>
+                {selectedQuoteId && <button type="button" className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-error hover:bg-error/5 disabled:opacity-50" onClick={deleteQuote} disabled={uploadingLineId !== null}>Delete draft</button>}
+              </div>
+            </details>
+            <Link href="/employee" className="hidden rounded-xl px-3 py-2.5 text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary sm:inline-flex">Portal</Link>
+            <button type="button" className="primary-gradient rounded-xl px-4 py-2.5 text-sm font-bold text-on-primary shadow-sm transition hover:brightness-105 disabled:opacity-60" onClick={saveQuote} disabled={saving || uploadingLineId !== null}>
+              {uploadingLineId !== null ? "Uploading…" : saving ? "Saving…" : selectedQuoteId ? "Save changes" : "Save draft"}
             </button>
-            {selectedQuoteId && <button type="button" className="text-error text-sm font-semibold disabled:opacity-50" onClick={deleteQuote} disabled={uploadingLineId !== null}>Delete</button>}
-            <Link href="/employee" className="text-sm font-semibold text-on-surface-variant hover:text-primary">Back to portal</Link>
           </div>
         </div>
       </header>
 
-      <div className="max-w-[1500px] mx-auto px-6 lg:px-10 py-8">
-        {storageStatus && <p className="mb-4 text-sm text-on-surface-variant" role="status">{storageStatus}</p>}
-        <section className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-6 mb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <label className="text-sm font-semibold">Project name<input className="mt-2 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 font-normal" value={quote.projectName} onChange={(event) => updateQuote("projectName", event.target.value)} placeholder="Project name" /></label>
-            <label className="text-sm font-semibold">Address<input className="mt-2 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 font-normal" value={quote.address} onChange={(event) => updateQuote("address", event.target.value)} placeholder="Project address" /></label>
+      <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        {storageStatus && <p className="mb-4 rounded-xl border border-outline-variant/20 bg-white px-4 py-3 text-sm text-on-surface-variant shadow-sm" role="status">{storageStatus}</p>}
+        <section className="mb-5 overflow-hidden rounded-2xl border border-primary/15 bg-white shadow-sm">
+          <div className="h-1.5 bg-gradient-to-r from-primary via-primary-container to-secondary" />
+          <div className="grid grid-cols-1 gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">Project name<input className="mt-2 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-sm font-medium normal-case tracking-normal text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10" value={quote.projectName} onChange={(event) => updateQuote("projectName", event.target.value)} placeholder="Name this project" /></label>
+              <label className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">Project address<input className="mt-2 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-sm font-medium normal-case tracking-normal text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10" value={quote.address} onChange={(event) => updateQuote("address", event.target.value)} placeholder="Site address" /></label>
+            </div>
+            <div className="flex items-center justify-between gap-6 rounded-xl bg-primary/[0.05] px-4 py-3 lg:min-w-64">
+              <div><p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Current quote total</p><p className="mt-1 font-headline text-2xl font-extrabold text-primary">{money(totals.sellTotal)}</p></div>
+              <div className="text-right"><p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Quote lines</p><p className="mt-1 text-lg font-bold text-on-surface">{quote.lines.length}</p></div>
+            </div>
           </div>
         </section>
 
-        <div className="mb-5 flex flex-wrap gap-2 rounded-xl border border-outline-variant/20 bg-surface-container-lowest p-2" role="tablist" aria-label="Quote workspace">
-          <button type="button" role="tab" aria-selected={activeTab === "quote"} className={`rounded-lg px-5 py-3 text-sm font-bold ${activeTab === "quote" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container-low"}`} onClick={() => setActiveTab("quote")}>Quote details</button>
-          <button type="button" role="tab" aria-selected={activeTab === "energy"} className={`rounded-lg px-5 py-3 text-sm font-bold ${activeTab === "energy" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container-low"}`} onClick={() => setActiveTab("energy")}>Energy savings analysis</button>
+        <div className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Quote workspace">
+          <button type="button" role="tab" aria-selected={activeTab === "quote"} className={`flex items-center gap-2 rounded-xl border px-5 py-3 text-sm font-bold transition ${activeTab === "quote" ? "border-primary bg-primary text-on-primary shadow-sm" : "border-outline-variant/30 bg-white text-on-surface-variant hover:border-primary/40 hover:bg-primary/[0.03]"}`} onClick={() => setActiveTab("quote")}><span>01</span> Quote details <span className={`rounded-full px-2 py-0.5 text-xs ${activeTab === "quote" ? "bg-white/15" : "bg-surface-container-low"}`}>{quote.lines.length}</span></button>
+          <button type="button" role="tab" aria-selected={activeTab === "energy"} className={`flex items-center gap-2 rounded-xl border px-5 py-3 text-sm font-bold transition ${activeTab === "energy" ? "border-primary bg-primary text-on-primary shadow-sm" : "border-outline-variant/30 bg-white text-on-surface-variant hover:border-primary/40 hover:bg-primary/[0.03]"}`} onClick={() => setActiveTab("energy")}><span>02</span> Energy analysis {energy.annualKwhSavings !== null && <span className={`rounded-full px-2 py-0.5 text-xs ${activeTab === "energy" ? "bg-white/15" : "bg-surface-container-low"}`}>{energy.annualKwhSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh</span>}</button>
         </div>
 
         {activeTab === "quote" && <div role="tabpanel" aria-label="Quote details" className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
           <section className="min-w-0 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/15 px-5 py-5 sm:px-6">
               <div className="min-w-0">
-                <h2 className="font-headline text-xl font-bold">Estimate lines</h2>
-                <p className="mt-1 text-sm text-on-surface-variant">Each fixture stays together in a full-width card. Edit details and review totals without scrolling sideways.</p>
-                <p className="mt-1 text-xs text-on-surface-variant">AI uses fixture details and matching history—not project addresses—to rank candidates.</p>
+                <h2 className="font-headline text-xl font-bold">Build your quote</h2>
+                <p className="mt-1 text-sm text-on-surface-variant">Add what is there, then what you are installing. Type in the description fields to see suggestions.</p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                <button type="button" className="rounded-full border border-primary/40 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/[0.05] disabled:opacity-60" onClick={requestAISuggestions} disabled={aiBusy}>{aiBusy ? "AI reviewing…" : "AI suggestions"}</button>
-                <button type="button" className="primary-gradient rounded-full px-4 py-2 text-sm font-bold text-on-primary" onClick={() => updateQuote("lines", [...quote.lines, emptyLine()])}>Add line</button>
+                <button type="button" className="rounded-xl border border-primary/30 bg-white px-4 py-2.5 text-sm font-bold text-primary transition hover:bg-primary/[0.04] disabled:opacity-60" onClick={requestAISuggestions} disabled={aiBusy}>{aiBusy ? "Reviewing…" : "Review with AI"}</button>
+                <button type="button" className="primary-gradient rounded-xl px-4 py-2.5 text-sm font-bold text-on-primary shadow-sm transition hover:brightness-105" onClick={() => updateQuote("lines", [...quote.lines, emptyLine()])}>+ Add fixture</button>
               </div>
             </div>
 
-            <div className="space-y-4 p-4 sm:p-5">
+            <div className="space-y-4 bg-surface-container-low/50 p-3 sm:p-5">
               {quote.lines.map((line, index) => {
                 const row = totals.rows.find((item) => item.line === line);
-                const suggestions = suggestionState?.lineIndex === index ? suggestionState : null;
+                const existingSuggestions = suggestionState?.lineIndex === index && suggestionState.field === "existing" ? suggestionState : null;
+                const proposedSuggestions = suggestionState?.lineIndex === index && suggestionState.field === "proposed" ? suggestionState : null;
                 const lineAI = aiRecommendations.filter((item) => item.lineIndex === index);
+                const lineNeedsDetails = !line.proposedDescription.trim() || line.proposedQty <= 0;
                 const fieldClass = "mt-1.5 w-full min-w-0 rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
                 const labelClass = "block min-w-0 text-xs font-semibold text-on-surface-variant";
-                return <article key={line.id} className="min-w-0 overflow-hidden rounded-2xl border border-outline-variant/25 bg-white shadow-sm">
+                const existingAutocompleteOptions = uniqueFixtureAutocompleteOptions([
+                  ...matchFixtureDescriptionExamples(line.existingDescription).map((description) => ({
+                    id: `existing-example-${description}`,
+                    group: line.existingDescription ? "Common descriptions" : "Common fixture descriptions",
+                    label: description,
+                    onSelect: () => {
+                      updateLine(index, "existingDescription", description);
+                      clearSuggestionSearch();
+                    },
+                  })),
+                  ...(existingSuggestions?.result?.existingFixtures ?? []).map((suggestion) => ({
+                    id: `existing-history-${suggestion.description}`,
+                    group: "Matching prior existing fixtures",
+                    label: suggestion.description,
+                    detail: [suggestion.fixtureType, suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`].filter(Boolean).join(" · "),
+                    onSelect: () => applyExistingFixtureSuggestion(index, suggestion),
+                  })),
+                  ...(existingSuggestions?.result?.history ?? []).map((suggestion) => ({
+                    id: `existing-replacement-${suggestion.description}`,
+                    group: "Suggested replacements from prior quotes",
+                    label: suggestion.description,
+                    detail: [suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`].filter(Boolean).join(" · "),
+                    onSelect: () => applyHistorySuggestion(index, suggestion),
+                  })),
+                  ...(existingSuggestions?.result?.warehouse ?? []).map((suggestion) => ({
+                    id: `existing-warehouse-${suggestion.id}`,
+                    group: "Warehouse replacement products",
+                    label: [suggestion.name, suggestion.model_number].filter(Boolean).join(" · "),
+                    detail: [suggestion.brand, suggestion.category].filter(Boolean).join(" · "),
+                    onSelect: () => applyWarehouseSuggestion(index, suggestion),
+                  })),
+                ]);
+                const proposedAutocompleteOptions = uniqueFixtureAutocompleteOptions([
+                  ...matchFixtureDescriptionExamples(line.proposedDescription).map((description) => ({
+                    id: `proposed-example-${description}`,
+                    group: line.proposedDescription ? "Common descriptions" : "Common fixture descriptions",
+                    label: description,
+                    onSelect: () => {
+                      updateLine(index, "proposedDescription", description);
+                      clearSuggestionSearch();
+                    },
+                  })),
+                  ...(proposedSuggestions?.result?.proposedFixtures ?? []).map((suggestion) => ({
+                    id: `proposed-history-${suggestion.description}`,
+                    group: "Matching prior proposed fixtures",
+                    label: suggestion.description,
+                    detail: [suggestion.fixtureType, suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`, suggestion.latestCost !== null && suggestion.latestCost > 0 ? `${money(suggestion.latestCost)} recorded unit cost` : ""].filter(Boolean).join(" · "),
+                    onSelect: () => applyHistorySuggestion(index, suggestion),
+                  })),
+                  ...(proposedSuggestions?.result?.warehouse ?? []).map((suggestion) => ({
+                    id: `proposed-warehouse-${suggestion.id}`,
+                    group: "Matching Warehouse products",
+                    label: [suggestion.name, suggestion.model_number].filter(Boolean).join(" · "),
+                    detail: [suggestion.brand, suggestion.category, suggestion.latest_price !== null && suggestion.latest_currency === "USD" ? `${money(suggestion.latest_price)} latest USD quote` : ""].filter(Boolean).join(" · "),
+                    onSelect: () => applyWarehouseSuggestion(index, suggestion),
+                  })),
+                ]);
+                const hasActiveAutocomplete = Boolean(existingSuggestions || proposedSuggestions);
+                return <article key={line.id} className={`relative ${hasActiveAutocomplete ? "z-20" : "z-0"} min-w-0 overflow-visible rounded-2xl border border-outline-variant/25 bg-white shadow-sm`}>
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/15 bg-surface-container-low/60 px-4 py-3 sm:px-5">
                     <div className="flex min-w-0 flex-wrap items-center gap-3">
-                      <span className="rounded-full bg-primary/[0.08] px-3 py-1 text-xs font-bold text-primary">LINE {String(index + 1).padStart(2, "0")}</span>
+                      <span className="rounded-full bg-on-surface/[0.06] px-3 py-1 text-xs font-bold text-on-surface">LINE {String(index + 1).padStart(2, "0")}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${lineNeedsDetails ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>{lineNeedsDetails ? "Add scope + qty" : "Scope entered"}</span>
                       <label className="flex items-center gap-2 text-xs font-semibold text-on-surface-variant">
                         Fixture ID
                         <input className="w-24 rounded-lg border border-outline-variant/30 bg-white px-2.5 py-1.5 text-sm font-medium text-on-surface outline-none focus:border-primary" value={line.fixtureId} onChange={(event) => updateLine(index, "fixtureId", event.target.value)} placeholder="F01" />
@@ -1003,16 +1112,18 @@ export default function QuoteBuilder() {
                       </label>
                     </div>
                     <div className="flex items-center gap-4">
-                      <div className="text-right"><span className="block text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Line sell total</span><strong className="font-headline text-lg text-primary">{row ? money(row.sellTotal) : money(0)}</strong></div>
-                      <button type="button" aria-label={`Remove estimate line ${index + 1}`} className="rounded-full px-3 py-2 text-xs font-bold text-error hover:bg-error/5 disabled:opacity-50" disabled={uploadingLineId === line.id} onClick={() => { void removeEstimateLine(line); }}>Remove</button>
+                      <div className="text-right"><span className="block text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Line total</span><strong className="font-headline text-lg text-primary">{row ? money(row.sellTotal) : money(0)}</strong></div>
+                      <button type="button" aria-label={`Remove estimate line ${index + 1}`} className="rounded-lg px-3 py-2 text-xs font-semibold text-error transition hover:bg-error/5 disabled:opacity-50" disabled={uploadingLineId === line.id} onClick={() => { void removeEstimateLine(line); }}>Remove</button>
                     </div>
                   </div>
 
-                  <section className="border-b border-outline-variant/15 px-4 py-4 sm:px-5">
-                    <h3 className="text-sm font-bold text-on-surface">Scope and audit identifiers</h3>
-                    <p className="mt-1 text-xs text-on-surface-variant">
-                      Separate work scope from observed condition. Codes do not change quantities or pricing.
-                    </p>
+                  <details className="border-b border-outline-variant/15">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-bold text-on-surface marker:hidden hover:bg-surface-container-low/50 sm:px-5">
+                      <span>Scope and condition codes <span className="ml-1 text-xs font-normal text-on-surface-variant">{(line.workCodes?.length ?? 0) + (line.conditionCode ? 1 : 0) ? `· ${(line.workCodes?.length ?? 0) + (line.conditionCode ? 1 : 0)} selected` : "· Optional"}</span></span>
+                      <span className="text-xs font-semibold text-primary">Show details</span>
+                    </summary>
+                    <section className="px-4 pb-4 sm:px-5">
+                    <p className="mb-3 text-xs text-on-surface-variant">Codes document the work and observed condition; they do not change quantities or pricing.</p>
                     <label className={`${labelClass} mt-3`}>Work identifiers (select all that apply)
                       <select className={fieldClass} value="" onChange={(event) => {
                         const item = workIdentifiers.find((identifier) => identifier.code === event.target.value);
@@ -1043,14 +1154,18 @@ export default function QuoteBuilder() {
                       </select>
                     </label>
                     {line.conditionCode && <p className="mt-2 text-xs text-on-surface-variant">{conditionIdentifiers.find((item) => item.code === line.conditionCode)?.treatment}</p>}
-                  </section>
+                    </section>
+                  </details>
 
-                  <section className="border-b border-outline-variant/15 px-4 py-4 sm:px-5">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                  <details className="border-b border-outline-variant/15">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-bold text-on-surface marker:hidden hover:bg-surface-container-low/50 sm:px-5">
                       <div>
-                        <h3 className="text-sm font-bold text-on-surface">Line photos <span className="font-normal text-on-surface-variant">({line.photoIds.length}/{maxLinePhotos})</span></h3>
-                        <p className="mt-0.5 text-xs text-on-surface-variant">Add site or fixture photos for this estimate line. Photos are saved with the draft.</p>
+                        Line photos <span className="ml-1 text-xs font-normal text-on-surface-variant">({line.photoIds.length}/{maxLinePhotos}) · Optional</span>
                       </div>
+                      <span className="text-xs font-semibold text-primary">{line.photoIds.length ? "View / manage" : "Add photos"}</span>
+                    </summary>
+                    <section className="px-4 pb-4 sm:px-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <label className={`inline-flex cursor-pointer items-center rounded-full border border-outline-variant/40 px-3.5 py-2 text-xs font-bold text-primary transition hover:bg-primary/[0.05] ${uploadingLineId !== null || line.photoIds.length >= maxLinePhotos ? "pointer-events-none opacity-50" : ""}`}>
                         {uploadingLineId === line.id ? "Preparing photos…" : "Upload photos"}
                         <input
@@ -1086,22 +1201,31 @@ export default function QuoteBuilder() {
                         </button>
                       </figure>)}
                     </div>}
-                  </section>
+                    </section>
+                  </details>
 
                   <div className="grid min-w-0 grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2">
-                    <section className="min-w-0 rounded-xl border border-outline-variant/15 bg-surface-container-low/30 p-4">
+                    <section className="min-w-0 rounded-xl border border-sky-200 bg-sky-50/70 p-4">
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <div><h3 className="text-sm font-bold text-on-surface">Existing fixture</h3><p className="mt-0.5 text-xs text-on-surface-variant">What is currently installed or being audited?</p></div>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Current</span>
+                        <div><h3 className="text-sm font-bold text-sky-950">Existing fixture</h3><p className="mt-0.5 text-xs text-sky-900/75">What is installed now?</p></div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-900">Existing</span>
                       </div>
-                      <label className={labelClass}>Fixture description
-                        <input className={fieldClass} value={line.existingDescription} onChange={(event) => { updateLine(index, "existingDescription", event.target.value); searchSuggestions(index, event.target.value); }} placeholder="Describe the current light" />
-                      </label>
+                      <div className={labelClass}>Existing fixture description
+                        <FixtureAutocomplete
+                          value={line.existingDescription}
+                          onChange={(value) => updateLine(index, "existingDescription", value)}
+                          onSearch={(query) => searchSuggestions(index, "existing", query)}
+                          label={`Existing fixture description, line ${index + 1}`}
+                          options={existingAutocompleteOptions}
+                          loading={existingSuggestions?.loading ?? false}
+                          notice={existingSuggestions?.result?.warehouseAvailable === false ? "Warehouse search is unavailable; fixture history and common descriptions are still available." : undefined}
+                          placeholder="Type a fixture, lamp, or model"
+                          className={fieldClass}
+                        />
+                      </div>
                       <label className={`${labelClass} mt-3`}>Existing fixture type
-                        <select className={fieldClass} value={line.existingFixtureType} onChange={(event) => updateLine(index, "existingFixtureType", event.target.value)}>
-                          <option value="">Select type</option>
-                          {fixtureTypes.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
+                        <input list={`existing-fixture-types-${line.id}`} className={fieldClass} value={line.existingFixtureType} onChange={(event) => updateLine(index, "existingFixtureType", event.target.value)} placeholder="Type or choose a fixture type" />
+                        <datalist id={`existing-fixture-types-${line.id}`}>{fixtureTypes.map((option) => <option key={option} value={option} />)}</datalist>
                       </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Existing input watts<input className={fieldClass} value={line.existingWatts} onChange={(event) => updateLine(index, "existingWatts", event.target.value)} placeholder="e.g. 190W" /></label>
@@ -1109,37 +1233,39 @@ export default function QuoteBuilder() {
                       </div>
                       {line.existingWattageReference && <p className="mt-2 text-xs text-on-surface-variant">Reference: {line.existingWattageReference}. Editing the description or watts clears this reference.</p>}
                       <InputWattagePicker onSelect={(entry) => applyInputWattage(index, entry)} />
-                      <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant">Enter at least 3 characters, then select a prior proposal or Warehouse match to apply it.</p>
-                      {suggestions && <div className="mt-3 max-h-72 space-y-3 overflow-y-auto rounded-xl border border-outline-variant/20 bg-white p-3">
-                        {suggestions.loading ? <p className="text-xs text-on-surface-variant">Searching proposal history and Warehouse pricing…</p> : suggestions.result ? <>
-                          {suggestions.result.history.length > 0 && <div><h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Prior proposals</h4><div className="space-y-2">{suggestions.result.history.map((item, suggestionIndex) => <button key={`${item.description}-${suggestionIndex}`} type="button" className="block w-full rounded-lg border border-outline-variant/20 p-2.5 text-left transition hover:border-primary/50 hover:bg-primary/[0.04]" onClick={() => applyHistorySuggestion(index, item)}><span className="block break-words text-sm font-semibold">{item.description}</span><span className="mt-1 block text-xs text-on-surface-variant">{item.priorUseCount} prior use{item.priorUseCount === 1 ? "" : "s"}{item.watts ? ` · ${item.watts}` : ""}{item.latestCost && item.latestCost > 0 ? ` · ${money(item.latestCost)} recorded cost` : ""}</span></button>)}</div></div>}
-                          {suggestions.result.warehouse.length > 0 && <div><h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Warehouse catalog matches</h4><div className="space-y-2">{suggestions.result.warehouse.map((item) => <button key={item.id} type="button" className="block w-full rounded-lg border border-outline-variant/20 p-2.5 text-left transition hover:border-primary/50 hover:bg-primary/[0.04]" onClick={() => applyWarehouseSuggestion(index, item)}><span className="block break-words text-sm font-semibold">{item.name} · {item.model_number}</span><span className="mt-1 block text-xs text-on-surface-variant">{[item.brand, item.category, item.latest_price !== null && item.latest_currency === "USD" ? `${money(item.latest_price)} latest USD quote` : "No recent USD quote"].filter(Boolean).join(" · ")}</span><span className="mt-1 block text-xs text-on-surface-variant">{item.latest_price !== null && item.latest_currency === "USD" ? `${item.latest_vendor || "Unknown vendor"} · ${item.latest_quoted_at ? new Date(item.latest_quoted_at).toLocaleDateString() : "date unavailable"} · quoted for ${item.latest_quantity ?? "?"} units` : "Price must be confirmed separately."}</span></button>)}</div></div>}
-                          {!suggestions.result.warehouseAvailable && <p className="text-xs text-error">Warehouse pricing is currently unavailable; prior proposal matches are still shown.</p>}
-                          {!suggestions.result.history.length && !suggestions.result.warehouse.length && <p className="text-xs text-on-surface-variant">No close matches found. You can continue entering this line manually.</p>}
-                        </> : <p className="text-xs text-on-surface-variant">Suggestions could not be loaded. Continue entering the quote manually.</p>}
-                        <button type="button" className="text-xs font-semibold text-on-surface-variant underline" onClick={() => setSuggestionState(null)}>Close suggestions</button>
-                      </div>}
+                      <p className="mt-2 text-[11px] leading-relaxed text-sky-900/75">Start typing for common descriptions and matches from prior quotes. Custom descriptions are welcome.</p>
                     </section>
 
-                    <section className="min-w-0 rounded-xl border border-primary/15 bg-primary/[0.025] p-4">
+                    <section className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <div><h3 className="text-sm font-bold text-on-surface">Proposed work</h3><p className="mt-0.5 text-xs text-on-surface-variant">What fixture, control, or service is being quoted?</p></div>
-                        <span className="rounded-full bg-primary/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">Proposed</span>
+                        <div><h3 className="text-sm font-bold text-emerald-950">Proposed work</h3><p className="mt-0.5 text-xs text-emerald-900/75">What will be installed or performed?</p></div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-900">Proposed</span>
                       </div>
-                      <label className={labelClass}>Proposed fixture / scope
-                        <input className={fieldClass} value={line.proposedDescription} onChange={(event) => updateLine(index, "proposedDescription", event.target.value)} placeholder="Fixture, model, or work description" />
-                      </label>
+                      <div className={labelClass}>Proposed fixture / scope description
+                        <FixtureAutocomplete
+                          value={line.proposedDescription}
+                          onChange={(value) => updateLine(index, "proposedDescription", value)}
+                          onSearch={(query) => searchSuggestions(index, "proposed", query)}
+                          label={`Proposed fixture or scope description, line ${index + 1}`}
+                          options={proposedAutocompleteOptions}
+                          loading={proposedSuggestions?.loading ?? false}
+                          notice={proposedSuggestions?.result?.warehouseAvailable === false ? "Warehouse search is unavailable; fixture history and common descriptions are still available." : undefined}
+                          placeholder="Type a fixture, model, or work description"
+                          className={fieldClass}
+                        />
+                      </div>
                       <label className={`${labelClass} mt-3`}>Proposed fixture type
-                        <select className={fieldClass} value={line.proposedFixtureType} onChange={(event) => updateLine(index, "proposedFixtureType", event.target.value)}>
-                          <option value="">Select type</option>
-                          {fixtureTypes.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
+                        <input list={`proposed-fixture-types-${line.id}`} className={fieldClass} value={line.proposedFixtureType} onChange={(event) => updateLine(index, "proposedFixtureType", event.target.value)} placeholder="Type or choose a fixture type" />
+                        <datalist id={`proposed-fixture-types-${line.id}`}>{fixtureTypes.map((option) => <option key={option} value={option} />)}</datalist>
                       </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Proposed watts<input className={fieldClass} value={line.proposedWatts} onChange={(event) => updateLine(index, "proposedWatts", event.target.value)} placeholder="e.g. 40W" /></label>
                         <label className={labelClass}>Work quantity<input type="number" min="0" className={fieldClass} value={line.proposedQty || ""} onChange={(event) => updateLine(index, "proposedQty", numberValue(event.target.value))} placeholder="0" /></label>
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-3">
+                      <details className="mt-4 rounded-lg border border-emerald-200/80 bg-white/70">
+                        <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-emerald-950 marker:text-emerald-800">Additional specifications and installation notes <span className="font-normal text-emerald-900/70">· Optional</span></summary>
+                        <div className="space-y-3 border-t border-emerald-200/70 p-3">
+                      <div className="grid grid-cols-2 gap-3">
                         {([
                           ["technology", "Technology", lightingTechnologies],
                           ["mountingType", "Mounting", mountingTypes],
@@ -1149,21 +1275,21 @@ export default function QuoteBuilder() {
                           ["dimming", "Dimming", dimmingOptions],
                           ["controlType", "Controls", controlOptions],
                         ] as const).map(([key, label, options]) => <label key={key} className={labelClass}>{label}
-                          <select className={fieldClass} value={line[key]} onChange={(event) => updateLine(index, key, event.target.value)}>
-                            <option value="">Not specified</option>
-                            {options.map((option) => <option key={option} value={option}>{option}</option>)}
-                          </select>
+                          <input list={`quote-option-${key}-${line.id}`} className={fieldClass} value={line[key]} onChange={(event) => updateLine(index, key, event.target.value)} placeholder="Type or choose" />
+                          <datalist id={`quote-option-${key}-${line.id}`}>{options.map((option) => <option key={option} value={option} />)}</datalist>
                         </label>)}
                       </div>
+                      <label className={labelClass}>Installation notes
+                        <textarea className={`${fieldClass} resize-y`} value={line.installNotes} onChange={(event) => updateLine(index, "installNotes", event.target.value)} placeholder="Optional notes for installation" rows={2} />
+                      </label>
+                        </div>
+                      </details>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Product unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.productCost || ""} onChange={(event) => updateLine(index, "productCost", numberValue(event.target.value))} placeholder="$0.00" /></label>
                         <label className={labelClass}>Labor unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.laborCost || ""} onChange={(event) => updateLine(index, "laborCost", numberValue(event.target.value))} placeholder="$0.00" /></label>
                       </div>
 
-                      {line.productCostSource && <p className="mt-2 text-[11px] text-on-surface-variant">{line.productCostSource === "warehouse_quote" ? `Warehouse quote: ${line.productCostVendor || "vendor not recorded"}${line.productCostQuotedAt ? ` · ${new Date(line.productCostQuotedAt).toLocaleDateString()}` : ""}` : `Prior proposal cost · used ${line.productCostPriorUseCount} time(s)`}</p>}
-                      <label className={`${labelClass} mt-3`}>Installation notes
-                        <textarea className={`${fieldClass} resize-y`} value={line.installNotes} onChange={(event) => updateLine(index, "installNotes", event.target.value)} placeholder="Optional notes for installation" rows={2} />
-                      </label>
+                      {line.productCostSource && <p className="mt-2 text-[11px] text-emerald-950">{line.productCostSource === "warehouse_quote" ? `Warehouse quote: ${line.productCostVendor || "vendor not recorded"}${line.productCostQuotedAt ? ` · ${new Date(line.productCostQuotedAt).toLocaleDateString()}` : ""}` : `Prior proposal cost · used ${line.productCostPriorUseCount} time(s)`}</p>}
                       {lineAI.map((item) => <div key={`${item.lineIndex}-${item.confidence}`} className="mt-3 rounded-xl border border-primary/20 bg-white p-3">
                         {item.candidate ? <>
                           <p className="text-[10px] font-bold uppercase tracking-wide text-primary">AI match · {item.confidence} confidence</p>
@@ -1181,18 +1307,27 @@ export default function QuoteBuilder() {
             </div>
           </section>
 
-          <aside className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-6 xl:sticky xl:top-6">
-            <h2 className="font-headline text-xl font-bold mb-5">Pricing controls</h2>
-            <div className="mb-6 rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div><h3 className="font-headline font-bold">Formula settings</h3><p className="mt-1 text-xs text-on-surface-variant">Edit the business rules used by the live totals and both exports.</p></div>
-                <button type="button" className="shrink-0 text-xs font-bold text-primary hover:underline" onClick={resetFormulaSettings}>Reset defaults</button>
-              </div>
-              <div className="mt-4 space-y-4">{formulaFields.map(({ key, label, description, suffix }) => <label key={key} className="block text-sm font-semibold">{label}<span className="ml-1 text-on-surface-variant">({suffix})</span><input type="number" min="0" max="99.99" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={(quote[key] as number) * 100} onChange={(event) => updateQuote(key, numberValue(event.target.value) / 100)} /><span className="mt-1 block text-xs font-normal leading-relaxed text-on-surface-variant">{description}</span></label>)}</div>
+          <aside className="rounded-2xl border border-outline-variant/20 bg-white p-5 shadow-sm xl:sticky xl:top-6">
+            <h2 className="mb-4 font-headline text-lg font-bold">Quote summary</h2>
+            <div className="rounded-xl bg-primary p-4 text-on-primary">
+              <span className="text-xs font-semibold uppercase tracking-wide text-on-primary/75">Sell total</span>
+              <strong className="mt-1 block font-headline text-3xl">{money(totals.sellTotal)}</strong>
             </div>
-            <div className="space-y-4 text-sm"><h3 className="font-headline font-bold">Project costs</h3>{([["shipping", "Shipping"], ["travel", "Travel"], ["miscellaneous", "Miscellaneous"]] as const).map(([key, label]) => <label key={key} className="block font-semibold">{label}<input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={quote[key] || ""} onChange={(event) => updateQuote(key, numberValue(event.target.value))} /> </label>)}</div>
-            <div className="border-t border-outline-variant/15 mt-6 pt-5 space-y-3 text-sm"><div className="flex justify-between"><span>Direct cost</span><strong>{money(totals.directCost)}</strong></div><div className="flex justify-between"><span>Contingency</span><strong>{money(totals.contingency)}</strong></div><div className="flex justify-between text-lg"><span>Sell total</span><strong className="text-primary">{money(totals.sellTotal)}</strong></div><div className="flex justify-between text-on-surface-variant"><span>Estimated profit</span><span>{money(totals.profit)} ({(totals.margin * 100).toFixed(1)}%)</span></div></div>
-            <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" className="bg-on-surface text-surface px-3 py-3 rounded-xl text-sm font-bold" onClick={() => download("xlsx")}>Excel</button><button type="button" className="primary-gradient text-on-primary px-3 py-3 rounded-xl text-sm font-bold" onClick={() => download("pdf")}>Proposal PDF</button></div>
+            <div className="mt-4 space-y-3 text-sm"><div className="flex justify-between"><span className="text-on-surface-variant">Direct cost</span><strong>{money(totals.directCost)}</strong></div><div className="flex justify-between"><span className="text-on-surface-variant">Contingency</span><strong>{money(totals.contingency)}</strong></div><div className="flex justify-between border-t border-outline-variant/15 pt-3"><span className="font-semibold">Estimated profit</span><span className="font-semibold">{money(totals.profit)} ({(totals.margin * 100).toFixed(1)}%)</span></div></div>
+            <div className="mt-4 space-y-2 border-t border-outline-variant/15 pt-3">
+              <details className="rounded-lg border border-outline-variant/20">
+                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Project costs <span className="text-xs font-normal text-on-surface-variant">· Optional</span></summary>
+                <div className="space-y-3 border-t border-outline-variant/15 p-3 text-sm">{([["shipping", "Shipping"], ["travel", "Travel"], ["miscellaneous", "Miscellaneous"]] as const).map(([key, label]) => <label key={key} className="block font-semibold">{label}<input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={quote[key] || ""} onChange={(event) => updateQuote(key, numberValue(event.target.value))} /> </label>)}</div>
+              </details>
+              <details className="rounded-lg border border-outline-variant/20">
+                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Formula settings <span className="text-xs font-normal text-on-surface-variant">· Advanced</span></summary>
+                <div className="border-t border-outline-variant/15 p-3">
+                  <div className="flex items-start justify-between gap-3"><p className="text-xs leading-relaxed text-on-surface-variant">Business rules used to calculate quote totals and exports.</p><button type="button" className="shrink-0 text-xs font-bold text-primary hover:underline" onClick={resetFormulaSettings}>Reset</button></div>
+                  <div className="mt-4 space-y-4">{formulaFields.map(({ key, label, description, suffix }) => <label key={key} className="block text-sm font-semibold">{label}<span className="ml-1 text-on-surface-variant">({suffix})</span><input type="number" min="0" max="99.99" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={(quote[key] as number) * 100} onChange={(event) => updateQuote(key, numberValue(event.target.value) / 100)} /><span className="mt-1 block text-xs font-normal leading-relaxed text-on-surface-variant">{description}</span></label>)}</div>
+                </div>
+              </details>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" className="rounded-xl border border-outline-variant/30 bg-white px-3 py-3 text-sm font-bold text-on-surface transition hover:bg-surface-container-low" onClick={() => download("xlsx")}>Excel</button><button type="button" className="primary-gradient rounded-xl px-3 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:brightness-105" onClick={() => download("pdf")}>Proposal PDF</button></div>
           </aside>
         </div>}
 

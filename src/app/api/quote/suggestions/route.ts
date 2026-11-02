@@ -15,6 +15,32 @@ type HistoryRow = {
   updated_at: string | null;
 };
 
+type FixtureDescriptionRow = {
+  kind: "existing" | "proposed";
+  description: string;
+  watts: string;
+  fixture_type: string;
+  prior_use_count: number;
+  latest_cost: string | null;
+  latest_updated_at: string | null;
+};
+
+function buildFixtureDescriptions(rows: FixtureDescriptionRow[], kind: FixtureDescriptionRow["kind"]) {
+  return rows
+    .filter((row) => row.kind === kind && row.description.trim())
+    .map((row) => {
+      const latestCost = row.latest_cost === null ? null : Number(row.latest_cost);
+      return {
+        description: row.description,
+        watts: row.watts || "",
+        fixtureType: row.fixture_type || "",
+        priorUseCount: Number(row.prior_use_count) || 1,
+        latestCost: latestCost !== null && Number.isFinite(latestCost) && latestCost >= 0 ? latestCost : null,
+        latestUpdatedAt: row.latest_updated_at || "",
+      };
+    });
+}
+
 function buildHistorySuggestions(rows: HistoryRow[]) {
   const grouped = new Map<string, {
     description: string;
@@ -106,6 +132,70 @@ export async function GET(request: Request) {
       [pattern, searchTerms, minimumMatches],
     );
 
+    const fixtureDescriptions = await db.query<FixtureDescriptionRow>(
+      `WITH history AS (
+       SELECT line->>'existingDescription' AS existing_description,
+         line->>'existingWatts' AS existing_watts,
+         line->>'existingFixtureType' AS existing_fixture_type,
+         line->>'proposedDescription' AS proposed_description,
+         line->>'proposedWatts' AS proposed_watts,
+         line->>'proposedFixtureType' AS proposed_fixture_type,
+         line->>'productCost' AS product_cost,
+         q.updated_at
+       FROM quotes q
+       CROSS JOIN LATERAL jsonb_array_elements(
+         CASE WHEN jsonb_typeof(q.quote_data->'lines') = 'array' THEN q.quote_data->'lines' ELSE '[]'::jsonb END
+       ) AS item(line)
+       WHERE q.owner_email LIKE '%@renewlighting.com'
+         AND q.status NOT IN ('rejected', 'archived')
+       UNION ALL
+       SELECT existing_description, '', '', proposed_description, proposed_watts, '', product_cost::text, source_date AS updated_at
+       FROM quote_suggestion_history
+       WHERE owner_email LIKE '%@renewlighting.com'
+       ), fixture_descriptions AS (
+       SELECT 'existing'::text AS kind, existing_description AS description,
+         existing_watts AS watts, existing_fixture_type AS fixture_type,
+         NULL::text AS product_cost, updated_at
+       FROM history
+       UNION ALL
+       SELECT 'proposed'::text AS kind, proposed_description AS description,
+         proposed_watts AS watts, proposed_fixture_type AS fixture_type,
+         product_cost, updated_at
+       FROM history
+       ), matched AS (
+       SELECT fixtures.*,
+         (SELECT count(*)::int
+          FROM unnest($2::text[]) AS term(value)
+          WHERE regexp_replace(lower(COALESCE(fixtures.description, '')), '[^a-z0-9]+', ' ', 'g')
+            LIKE '%' || term.value || '%') AS match_count
+       FROM fixture_descriptions fixtures
+       WHERE length(trim(COALESCE(fixtures.description, ''))) > 0
+       ), grouped AS (
+       SELECT kind, MIN(description) AS description,
+         (ARRAY_AGG(watts ORDER BY updated_at DESC NULLS LAST))[1] AS watts,
+         (ARRAY_AGG(fixture_type ORDER BY updated_at DESC NULLS LAST))[1] AS fixture_type,
+         COUNT(*)::int AS prior_use_count,
+         (ARRAY_AGG(product_cost ORDER BY updated_at DESC NULLS LAST))[1] AS latest_cost,
+         MAX(updated_at) AS latest_updated_at,
+         MAX(match_count) AS relevance
+       FROM matched
+       WHERE description ILIKE $1 OR match_count >= $3
+       GROUP BY kind, lower(description)
+       ), ranked AS (
+       SELECT grouped.*,
+         ROW_NUMBER() OVER (
+           PARTITION BY kind
+           ORDER BY relevance DESC, prior_use_count DESC, latest_updated_at DESC NULLS LAST
+         ) AS suggestion_rank
+       FROM grouped
+       )
+       SELECT kind, description, watts, fixture_type, prior_use_count, latest_cost, latest_updated_at
+       FROM ranked
+       WHERE suggestion_rank <= 30
+       ORDER BY suggestion_rank, kind`,
+      [pattern, searchTerms, minimumMatches],
+    );
+
     let warehouse: Awaited<ReturnType<typeof searchWarehouseQuoteSuggestions>> = [];
     let warehouseAvailable = true;
     try {
@@ -117,6 +207,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       history: buildHistorySuggestions(rows),
+      existingFixtures: buildFixtureDescriptions(fixtureDescriptions.rows, "existing"),
+      proposedFixtures: buildFixtureDescriptions(fixtureDescriptions.rows, "proposed"),
       warehouse,
       warehouseAvailable,
     }, { headers: { "Cache-Control": "private, no-store" } });
