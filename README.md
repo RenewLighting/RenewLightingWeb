@@ -121,7 +121,9 @@ and stored in the quote database, and only the owning Renew employee can view or
 ### Input wattage and scope identifiers
 
 Each estimate line has **Work identifiers** (multiple selections) and a separate
-**Existing fixture condition**. The 15 work codes and five `EX-*` condition codes
+**Existing fixture condition**. Add work identifiers one at a time from the dropdown;
+selected identifiers appear below with their guidance and a Remove action.
+The 15 work codes and five `EX-*` condition codes
 match the supplied identifier image. Selected codes display their estimating
 treatment as guidance; they do not automatically add labor, quantities, scope notes,
 or costs. Saved drafts and quote-history details retain these identifiers. Priced

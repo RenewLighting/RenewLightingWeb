@@ -989,20 +989,25 @@ export default function QuoteBuilder() {
                     <p className="mt-1 text-xs text-on-surface-variant">
                       Separate work scope from observed condition. Codes do not change quantities or pricing.
                     </p>
-                    <fieldset className="mt-3">
-                      <legend className="mb-2 text-xs font-semibold">Work identifiers (select all that apply)</legend>
-                      <div className="flex flex-wrap gap-2">
+                    <label className={`${labelClass} mt-3`}>Work identifiers (select all that apply)
+                      <select className={fieldClass} value="" onChange={(event) => {
+                        const item = workIdentifiers.find((identifier) => identifier.code === event.target.value);
+                        if (item && !line.workCodes?.includes(item.code)) toggleWorkCode(index, item.code);
+                      }}>
+                        <option value="">Select a work identifier to add</option>
                         {workIdentifiers.map((item) => (
-                          <label key={item.code} title={item.treatment} className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-outline-variant/30 bg-white px-2.5 py-2 text-xs">
-                            <input type="checkbox" checked={line.workCodes?.includes(item.code) ?? false} onChange={() => toggleWorkCode(index, item.code)} />
-                            <span>{item.code} - {item.description}</span>
-                          </label>
+                          <option key={item.code} value={item.code} disabled={line.workCodes?.includes(item.code)}>
+                            {item.code} - {item.description}
+                          </option>
                         ))}
-                      </div>
-                    </fieldset>
+                      </select>
+                    </label>
                     {(line.workCodes ?? []).map((code) => {
                       const item = workIdentifiers.find((identifier) => identifier.code === code);
-                      return item ? <p key={code} className="mt-2 text-xs text-on-surface-variant"><strong>{code}:</strong> {item.treatment}</p> : null;
+                      return item ? <div key={code} className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-outline-variant/20 p-3 text-xs text-on-surface-variant">
+                        <div><p className="font-semibold">{code} - {item.description}</p><p className="mt-1">{item.treatment}</p></div>
+                        <button type="button" aria-label={`Remove ${code} from line ${index + 1}`} className="shrink-0 font-semibold text-error hover:underline" onClick={() => toggleWorkCode(index, code)}>Remove</button>
+                      </div> : null;
                     })}
                     <label className={`${labelClass} mt-3 block`}>Existing fixture condition
                       <select className={fieldClass} value={line.conditionCode ?? ""} onChange={(event) => {
