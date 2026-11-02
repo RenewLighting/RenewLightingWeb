@@ -1,3 +1,5 @@
+import type { ConditionCode, WorkCode } from "@/lib/quote-identifiers";
+
 export type QuoteLine = {
   id: string;
   fixtureId: string;
@@ -6,6 +8,9 @@ export type QuoteLine = {
   existingQty: number;
   existingDescription: string;
   existingWatts: string;
+  existingWattageReference?: string;
+  workCodes?: WorkCode[];
+  conditionCode?: ConditionCode | "";
   proposedQty: number;
   proposedDescription: string;
   proposedWatts: string;
@@ -46,6 +51,9 @@ export const emptyLine = (): QuoteLine => ({
   existingQty: 0,
   existingDescription: '',
   existingWatts: '',
+  existingWattageReference: '',
+  workCodes: [],
+  conditionCode: '',
   proposedQty: 0,
   proposedDescription: '',
   proposedWatts: '',

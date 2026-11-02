@@ -8,6 +8,7 @@ import { authOptions } from "@/lib/auth";
 import { db, ensureQuoteTable } from "@/lib/db";
 import { parseQuoteWorkbook } from "@/lib/quote-workbook-import";
 import type { Quote, QuoteLine } from "@/lib/quote";
+import { isConditionCode, isWorkCode } from "@/lib/quote-identifiers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -338,6 +339,11 @@ function parsePreparedQuote(value: unknown): Quote | null {
   for (const rawLine of input.lines) {
     if (typeof rawLine !== "object" || rawLine === null || Array.isArray(rawLine)) return null;
     const line = rawLine as Record<string, unknown>;
+    if (line.workCodes !== undefined && (!Array.isArray(line.workCodes)
+      || line.workCodes.length > 15 || !line.workCodes.every(isWorkCode))) return null;
+    if (line.conditionCode !== undefined && line.conditionCode !== "" && !isConditionCode(line.conditionCode)) return null;
+    if (line.existingWattageReference !== undefined && (typeof line.existingWattageReference !== "string"
+      || line.existingWattageReference.length > 1200)) return null;
     const textLimits = {
       id: 100,
       fixtureId: 100,
@@ -384,6 +390,9 @@ function parsePreparedQuote(value: unknown): Quote | null {
     lines.push({
       id: text.id,
       fixtureId: text.fixtureId,
+      workCodes: Array.isArray(line.workCodes) ? line.workCodes.filter(isWorkCode) : [],
+      conditionCode: isConditionCode(line.conditionCode) ? line.conditionCode : "",
+      existingWattageReference: typeof line.existingWattageReference === "string" ? line.existingWattageReference : "",
       address: text.address,
       location: text.location,
       existingQty: lineNumbers.existingQty,

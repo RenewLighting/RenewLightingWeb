@@ -118,6 +118,35 @@ Warehouse access is proxied server-side using the existing employee session and
 Each estimate line can include up to three site or fixture photos. Images are resized
 and stored in the quote database, and only the owning Renew employee can view or delete them.
 
+### Input wattage and scope identifiers
+
+Each estimate line has **Work identifiers** (multiple selections) and a separate
+**Existing fixture condition**. The 15 work codes and five `EX-*` condition codes
+match the supplied identifier image. Selected codes display their estimating
+treatment as guidance; they do not automatically add labor, quantities, scope notes,
+or costs. Saved drafts and quote-history details retain these identifiers. Priced
+proposal PDF lines show the codes and descriptions; internal Excel exports include
+all lines, including unpriced audit observations, and retain the identifiers on
+re-import. Existing quotes without these fields remain supported.
+
+Under **Existing fixture**, expand **Look up existing input wattage** to search or
+filter the 173 entries converted from the supplied `Input Wattage Table.xlsx`.
+The source workbook's internal modified timestamp is April 24, 2025; it is not a
+verified publication/revision date. The normalized data is in
+`src/lib/input-wattage-data.json`, with source metadata in `src/lib/input-wattage.ts`.
+This is an estimating reference, not a claim that the workbook is the latest
+utility-approved table. Use installed lamp/ballast specifications, measured input,
+or the applicable current utility program rules to verify the value.
+Selecting an entry fills the existing description and **system input watts**,
+not the lamp's nominal wattage, and records the reference. Manual edits to the
+description or watts clear that reference. Proposed LED watts remain manual or
+come from an explicitly selected product/proposal match.
+
+Run `npm run test:quote` with Node.js 22.15+ (or 24+) to check catalog values,
+identifier validation, unchanged pricing, Excel round-trips, and legacy quotes.
+The test runner uses the existing TypeScript dependency and Node's built-in test
+runner; no additional packages are needed.
+
 The **AI suggestions** action uses Claude to rank only the historical proposal and
 Warehouse catalog candidates retrieved for the existing fixture lines. It can fill
 an empty proposed fixture, wattage, and supported cost, and copy a quantity already

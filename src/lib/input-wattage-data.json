@@ -1,0 +1,867 @@
+[
+  {
+    "category": "Pool_Pumps_Old",
+    "description": "Single Speed Pump #1",
+    "watts": 1450
+  },
+  {
+    "category": "Pool_Pumps_Old",
+    "description": "Single Speed Pump #2",
+    "watts": 1670
+  },
+  {
+    "category": "Pool_Pumps_Old",
+    "description": "Single Speed Pump #3",
+    "watts": 1100
+  },
+  {
+    "category": "Pool_Pumps_Old",
+    "description": "Single Speed Pump #4",
+    "watts": 1680
+  },
+  {
+    "category": "Pool_Pumps_Old",
+    "description": "Single Speed Pump #5",
+    "watts": 1800
+  },
+  {
+    "category": "Pool_Pumps_Old",
+    "description": "Single Speed Pump #6",
+    "watts": 1640
+  },
+  {
+    "category": "Pool_Pumps_Old",
+    "description": "Single Speed Pump #7",
+    "watts": 1500
+  },
+  {
+    "category": "Pool_Lights_Old",
+    "description": "500W Incandescent Pool Light",
+    "watts": 500
+  },
+  {
+    "category": "Pool_Lights_Old",
+    "description": "300W Incandescent Pool Light",
+    "watts": 300
+  },
+  {
+    "category": "Pool_Lights_Old",
+    "description": "100W Incandescent Pool Light",
+    "watts": 100
+  },
+  {
+    "category": "Fluorescent_Highbay_Old",
+    "description": "Existing 4-Lamp T8 Highbay 32W (No Sensor)",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Highbay_Old",
+    "description": "Existing 6-Lamp T8 Highbay 32W (No Sensor)",
+    "watts": 225
+  },
+  {
+    "category": "Fluorescent_Highbay_Old",
+    "description": "Existing 4-Lamp T5HO Highbay 54W (No Sensor)",
+    "watts": 234
+  },
+  {
+    "category": "Fluorescent_Highbay_Old",
+    "description": "Existing 6-Lamp T5HO Highbay 54W (No Sensor)",
+    "watts": 351
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) PL-13 CFL Hardwired",
+    "watts": 15.9
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (2) PL-13 CFL Hardwired",
+    "watts": 31.8
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) PL-18 CFL Hardwired",
+    "watts": 18
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (2) PL-18 CFL Hardwired",
+    "watts": 36
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) PL-26 CFL Hardwired",
+    "watts": 26
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (2) PL-26 CFL Hardwired",
+    "watts": 52
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) PL-32 CFL Hardwired",
+    "watts": 32
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (2) PL-32 CFL Hardwired",
+    "watts": 64
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) PL-42 CFL Hardwired",
+    "watts": 42
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (2) PL-42 CFL Hardwired",
+    "watts": 84
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) Spiral 13W CFL Screw-in Base",
+    "watts": 13
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) Spiral 15W CFL Screw-in Base",
+    "watts": 15
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) Spiral 20W CFL Screw-in Base",
+    "watts": 20
+  },
+  {
+    "category": "Fluorescent_Lamp_Old",
+    "description": "Existing (1) Spiral 26W CFL Screw-in Base",
+    "watts": 26
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2' 1LT12 Std",
+    "watts": 20
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2' 2LT12 Std",
+    "watts": 40
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2' 3LT12 Std",
+    "watts": 60
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2' 4LT12 Std",
+    "watts": 80
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "3' 1LT12 Std",
+    "watts": 30
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "3' 2LT12 Std",
+    "watts": 60
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "3' 3LT12 Std",
+    "watts": 90
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "3' 4LT12 Std",
+    "watts": 120
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "5' 1L F60T12 HO",
+    "watts": 65
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "5' 2L F60T12 HO",
+    "watts": 130
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "6' 1LT12 Std",
+    "watts": 50
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "6' 2LT12 Std",
+    "watts": 100
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "6' 72W 1LT12 HO",
+    "watts": 75
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "6' 72W 2LT12 HO",
+    "watts": 150
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "1L T8 32W 1st Generation",
+    "watts": 30
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2L T8 32W 1st Generation",
+    "watts": 58
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "3L T8 32W 1st Generation",
+    "watts": 88
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "4L T8 32W 1st Generation",
+    "watts": 116
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2' 1L T8 17W 1st Generation",
+    "watts": 15
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2' 2L T8 17W 1st Generation",
+    "watts": 31
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2' 3L T8 17W 1st Generation",
+    "watts": 46
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "2' 4L T8 17W 1st Generation",
+    "watts": 61
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "8' 1L T8 59W 1st Generation",
+    "watts": 52
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "8' 2L T8 59W 1st Generation",
+    "watts": 104
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "8' 4L T8 59W 1st Generation",
+    "watts": 208
+  },
+  {
+    "category": "Fluorescent_Other_Old",
+    "description": "Exit Sign - CFL",
+    "watts": 18
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 1L 8' T12 Std Strip",
+    "watts": 65
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 2L 8' T12 Std Strip",
+    "watts": 132
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 3L 8' T12 Std Strip",
+    "watts": 195
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 4L 8' T12 Std Strip",
+    "watts": 264
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 1L 8' T12 Std Industrial (Hooded)",
+    "watts": 65
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 2L 8' T12 Std Industrial (Hooded)",
+    "watts": 132
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 3L 8' T12 Std Industrial (Hooded)",
+    "watts": 195
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 4L 8' T12 Std Industrial (Hooded)",
+    "watts": 264
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 2L 8' T12 Std Wrap",
+    "watts": 132
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 4L 8' T12 Std Wrap",
+    "watts": 264
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 1L 8' T12 HO Strip",
+    "watts": 101
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 2L 8' T12 HO Strip",
+    "watts": 202
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 3L 8' T12 HO Strip",
+    "watts": 303
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 4L 8' T12 HO Strip",
+    "watts": 404
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 1L 8' T12 HO Industrial (Hooded)",
+    "watts": 101
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 2L 8' T12 HO Industrial (Hooded)",
+    "watts": 202
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 3L 8' T12 HO Industrial (Hooded)",
+    "watts": 303
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 4L 8' T12 HO Industrial (Hooded)",
+    "watts": 404
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 2L 4' T12 Std Strip",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 4L 4' T12 Std Strip",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 6L 4' T12 Std Strip",
+    "watts": 222
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 8L 4' T12 Std Strip",
+    "watts": 296
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 2L 4' T12 Std Industrial (Hooded)",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 4L 4' T12 Std Industrial (Hooded)",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 6L 4' T12 Std Industrial (Hooded)",
+    "watts": 222
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x8 8L 4' T12 Std Industrial (Hooded)",
+    "watts": 296
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x4 1L 4' T12 Std Strip",
+    "watts": 34
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x4 2L 4' T12 Std Strip",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x4 3L 4' T12 Std Strip",
+    "watts": 111
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x4 4L 4' T12 Std Strip",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x4 1L 4' T12 Std Industrial (Hooded)",
+    "watts": 34
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x4 2L 4' T12 Std Industrial (Hooded)",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x4 3L 4' T12 Std Industrial (Hooded)",
+    "watts": 111
+  },
+  {
+    "category": "Fluorescent_Strip_Old",
+    "description": "1x4 4L 4' T12 Std Industrial (Hooded)",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 2L 4' T12 Std Troffer",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 3L 4' T12 Std Troffer",
+    "watts": 111
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 3L 4' T12 (2 Ballasts) Std Troffer",
+    "watts": 111
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 4L 4' T12 Std Troffer",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 4L 4' T12 (2 Ballasts) Std Troffer",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "4x4 6L 4' T12 Std Troffer",
+    "watts": 222
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "4x4 8L 4' T12 Std Troffer",
+    "watts": 296
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "1x4 1L 4' T12 Std Troffer",
+    "watts": 34
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "1x4 2L 4' T12 Std Troffer",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "1x4 3L 4' T12 Std Troffer",
+    "watts": 111
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "1x4 4L 4' T12 Std Troffer",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x2 1L U T12 Troffer",
+    "watts": 38
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x2 2L U T12 Troffer",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x2 2L 2' T12 Troffer",
+    "watts": 40
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x2 3L 2' T12 Troffer",
+    "watts": 60
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x2 4L 2' T12 Troffer",
+    "watts": 80
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 2LT8 4' 32W 1st Generation",
+    "watts": 58
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 3LT8 4' 32W 1st Generation",
+    "watts": 88
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 3LT8 4' 32W (2 Ballast) 1st Generation",
+    "watts": 88
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 4LT8 4' 32W 1st Generation",
+    "watts": 116
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x4 4LT8 4' 32W (2 Ballast) 1st Generation",
+    "watts": 116
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x2 2LT8 U Shape 32W 1st Generation",
+    "watts": 58
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x2 2LT8 2' 17W 1st Generation",
+    "watts": 31
+  },
+  {
+    "category": "Fluorescent_Troffer_Old",
+    "description": "2x2 3LT8 2' 17W 1st Generation",
+    "watts": 46
+  },
+  {
+    "category": "Fluorescent_Wrap_Old",
+    "description": "1x8 2L 4' T12 Std Wrap",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Wrap_Old",
+    "description": "1x8 4L 4' T12 Std Wrap",
+    "watts": 148
+  },
+  {
+    "category": "Fluorescent_Wrap_Old",
+    "description": "1x8 8L 4' T12 Std Wrap",
+    "watts": 296
+  },
+  {
+    "category": "Fluorescent_Wrap_Old",
+    "description": "1x4 1L 4' T12 Std Wrap",
+    "watts": 34
+  },
+  {
+    "category": "Fluorescent_Wrap_Old",
+    "description": "1x4 2L 4' T12 Std Wrap",
+    "watts": 74
+  },
+  {
+    "category": "Fluorescent_Wrap_Old",
+    "description": "1x4 4L 4' T12 Std Wrap",
+    "watts": 148
+  },
+  {
+    "category": "Halogen",
+    "description": "20W MR-16 Halogen",
+    "watts": 20
+  },
+  {
+    "category": "Halogen",
+    "description": "35W MR-16 Halogen",
+    "watts": 35
+  },
+  {
+    "category": "Halogen",
+    "description": "50W MR-16 Halogen",
+    "watts": 50
+  },
+  {
+    "category": "Halogen",
+    "description": "75W MR-16 Halogen",
+    "watts": 75
+  },
+  {
+    "category": "High_Pressure_Sodium_Old",
+    "description": "1000W High Pressure Sodium",
+    "watts": 1100
+  },
+  {
+    "category": "High_Pressure_Sodium_Old",
+    "description": "400W High Pressure Sodium",
+    "watts": 465
+  },
+  {
+    "category": "High_Pressure_Sodium_Old",
+    "description": "250W High Pressure Sodium",
+    "watts": 295
+  },
+  {
+    "category": "High_Pressure_Sodium_Old",
+    "description": "150W High Pressure Sodium",
+    "watts": 188
+  },
+  {
+    "category": "High_Pressure_Sodium_Old",
+    "description": "100W High Pressure Sodium",
+    "watts": 138
+  },
+  {
+    "category": "High_Pressure_Sodium_Old",
+    "description": "70W High Pressure Sodium",
+    "watts": 95
+  },
+  {
+    "category": "High_Pressure_Sodium_Old",
+    "description": "50W High Pressure Sodium",
+    "watts": 66
+  },
+  {
+    "category": "Incandescent",
+    "description": "120W PAR38",
+    "watts": 125
+  },
+  {
+    "category": "Incandescent",
+    "description": "90W PAR38",
+    "watts": 90
+  },
+  {
+    "category": "Incandescent",
+    "description": "75W PAR38",
+    "watts": 75
+  },
+  {
+    "category": "Incandescent",
+    "description": "75W PAR30",
+    "watts": 75
+  },
+  {
+    "category": "Incandescent",
+    "description": "60W PAR30",
+    "watts": 60
+  },
+  {
+    "category": "Incandescent",
+    "description": "50W PAR30",
+    "watts": 50
+  },
+  {
+    "category": "Incandescent",
+    "description": "50W PAR20",
+    "watts": 50
+  },
+  {
+    "category": "Incandescent",
+    "description": "150W R40",
+    "watts": 150
+  },
+  {
+    "category": "Incandescent",
+    "description": "75W R40",
+    "watts": 75
+  },
+  {
+    "category": "Incandescent",
+    "description": "65W R30",
+    "watts": 65
+  },
+  {
+    "category": "Incandescent",
+    "description": "50W R20",
+    "watts": 50
+  },
+  {
+    "category": "Incandescent",
+    "description": "100W A19",
+    "watts": 100
+  },
+  {
+    "category": "Incandescent",
+    "description": "75W A19",
+    "watts": 75
+  },
+  {
+    "category": "Incandescent",
+    "description": "60W A19",
+    "watts": 60
+  },
+  {
+    "category": "Incandescent",
+    "description": "40W A19",
+    "watts": 40
+  },
+  {
+    "category": "Incandescent",
+    "description": "75W G40",
+    "watts": 75
+  },
+  {
+    "category": "Incandescent",
+    "description": "65W G30",
+    "watts": 65
+  },
+  {
+    "category": "Incandescent",
+    "description": "50W G25",
+    "watts": 50
+  },
+  {
+    "category": "Incandescent",
+    "description": "40W Flame Tip Candleabra",
+    "watts": 40
+  },
+  {
+    "category": "Incandescent",
+    "description": "25W Flame Tip Candleabra",
+    "watts": 25
+  },
+  {
+    "category": "Incandescent",
+    "description": "120W Incandescent Drum",
+    "watts": 120
+  },
+  {
+    "category": "Incandescent",
+    "description": "120W Incandescent Vanity",
+    "watts": 120
+  },
+  {
+    "category": "Incandescent",
+    "description": "Exit Sign - Incandescent",
+    "watts": 40
+  },
+  {
+    "category": "Mercury_Vapor",
+    "description": "400W Mercury Vapor",
+    "watts": 475
+  },
+  {
+    "category": "Mercury_Vapor",
+    "description": "250W Mercury Vapor",
+    "watts": 305
+  },
+  {
+    "category": "Mercury_Vapor",
+    "description": "175W Mercury Vapor",
+    "watts": 225
+  },
+  {
+    "category": "Mercury_Vapor",
+    "description": "100W Mercury Vapor",
+    "watts": 125
+  },
+  {
+    "category": "Mercury_Vapor",
+    "description": "50W Mercury Vapor",
+    "watts": 60
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "1000W Metal Halide",
+    "watts": 1080
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "400W Metal Halide",
+    "watts": 458
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "250W Metal Halide",
+    "watts": 295
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "175W Metal Halide",
+    "watts": 215
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "150W Metal Halide",
+    "watts": 190
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "100W Metal Halide",
+    "watts": 128
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "70W Metal Halide",
+    "watts": 95
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "50W Metal Halide",
+    "watts": 72
+  },
+  {
+    "category": "Metal_Halide_Old",
+    "description": "350W MH Hi-bay, Type 2, Pulse Start, Clear Bulb",
+    "watts": 400
+  },
+  {
+    "category": "Other_Old",
+    "description": "Exit Sign - Nuclear (non-powered)",
+    "watts": 0
+  },
+  {
+    "category": "Other_Old",
+    "description": "Shade Pole Cooler Motor",
+    "watts": 118
+  },
+  {
+    "category": "Other_Old",
+    "description": "Manual Wall Switch (White)",
+    "watts": 0
+  },
+  {
+    "category": "Other_Old",
+    "description": "Manual Wall Switch (Ivory)",
+    "watts": 0
+  },
+  {
+    "category": "Other_Old",
+    "description": "Manual Wall Switch (Gray)",
+    "watts": 0
+  },
+  {
+    "category": "Other_Old",
+    "description": "Permanently Remove",
+    "watts": 0
+  },
+  {
+    "category": "Other_Old",
+    "description": "No Change",
+    "watts": 0
+  }
+]

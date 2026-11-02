@@ -5,7 +5,10 @@ import Link from "next/link";
 import Image from "next/image";
 
 import Icon from "@/components/Icon";
+import InputWattagePicker from "@/components/InputWattagePicker";
+import { wattageReference, type InputWattageEntry } from "@/lib/input-wattage";
 import { calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
+import { conditionIdentifiers, describeCondition, describeWorkCodes, workIdentifiers, type WorkCode } from "@/lib/quote-identifiers";
 import type { WarehouseQuoteSuggestion } from "@/lib/warehouse-quote-suggestions";
 import type { WorkbookPhoto } from "@/lib/quote-workbook-import";
 
@@ -186,6 +189,9 @@ function QuoteHistoryDetails({
               <h5 className="mt-1 font-semibold">{line.proposedDescription || "Proposed fixture not specified"}</h5>
               <p className="mt-1 text-sm text-on-surface-variant">Existing: {line.existingDescription || "Not specified"}{line.existingWatts ? ` · ${line.existingWatts}` : ""} · Qty {line.existingQty}</p>
               <p className="text-sm text-on-surface-variant">Proposed: {line.proposedWatts || "Watts not specified"} · Qty {line.proposedQty}{line.height ? ` · Height ${line.height}` : ""}</p>
+              {line.workCodes?.length ? <p className="mt-1 text-sm">Work: {describeWorkCodes(line.workCodes)}</p> : null}
+              {line.conditionCode && <p className="text-sm">Condition: {describeCondition(line.conditionCode)}</p>}
+              {line.existingWattageReference && <p className="text-xs text-on-surface-variant">Input wattage reference: {line.existingWattageReference}</p>}
               {line.installNotes && <p className="mt-2 whitespace-pre-wrap text-sm">{line.installNotes}</p>}
             </div>
             <p className="text-right text-sm"><span className="block text-xs text-on-surface-variant">Line sell</span><strong className="text-lg text-primary">{money(row?.sellTotal ?? 0)}</strong></p>
@@ -594,13 +600,16 @@ export default function QuoteBuilder() {
     setQuote((current) => ({ ...current, [key]: value }));
   }
 
-  function updateLine(index: number, key: keyof QuoteLine, value: string | number) {
+  function updateLine<K extends keyof QuoteLine>(index: number, key: K, value: QuoteLine[K]) {
     setAiRecommendations([]);
     setQuote((current) => ({
       ...current,
       lines: current.lines.map((line, lineIndex) => {
         if (lineIndex !== index) return line;
         const updated = { ...line, [key]: value };
+        if (key === "existingWatts" || key === "existingDescription") {
+          updated.existingWattageReference = "";
+        }
         if (key === "productCost" || key === "proposedDescription") {
           updated.productCostSource = "";
           updated.productCostVendor = "";
@@ -611,6 +620,27 @@ export default function QuoteBuilder() {
         return updated;
       }),
     }));
+  }
+
+  function applyInputWattage(index: number, entry: InputWattageEntry) {
+    setAiRecommendations([]);
+    setQuote((current) => ({
+      ...current,
+      lines: current.lines.map((line, lineIndex) => lineIndex === index ? {
+        ...line,
+        existingDescription: entry.description,
+        existingWatts: `${entry.watts}W`,
+        existingWattageReference: wattageReference(entry),
+      } : line),
+    }));
+    searchSuggestions(index, entry.description);
+  }
+
+  function toggleWorkCode(index: number, code: WorkCode) {
+    const codes = quote.lines[index].workCodes ?? [];
+    updateLine(index, "workCodes", codes.includes(code)
+      ? codes.filter((item) => item !== code)
+      : [...codes, code]);
   }
 
   async function uploadLinePhotos(lineId: string, files: FileList | null) {
@@ -955,6 +985,38 @@ export default function QuoteBuilder() {
                   </div>
 
                   <section className="border-b border-outline-variant/15 px-4 py-4 sm:px-5">
+                    <h3 className="text-sm font-bold text-on-surface">Scope and audit identifiers</h3>
+                    <p className="mt-1 text-xs text-on-surface-variant">
+                      Separate work scope from observed condition. Codes do not change quantities or pricing.
+                    </p>
+                    <fieldset className="mt-3">
+                      <legend className="mb-2 text-xs font-semibold">Work identifiers (select all that apply)</legend>
+                      <div className="flex flex-wrap gap-2">
+                        {workIdentifiers.map((item) => (
+                          <label key={item.code} title={item.treatment} className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-outline-variant/30 bg-white px-2.5 py-2 text-xs">
+                            <input type="checkbox" checked={line.workCodes?.includes(item.code) ?? false} onChange={() => toggleWorkCode(index, item.code)} />
+                            <span>{item.code} - {item.description}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                    {(line.workCodes ?? []).map((code) => {
+                      const item = workIdentifiers.find((identifier) => identifier.code === code);
+                      return item ? <p key={code} className="mt-2 text-xs text-on-surface-variant"><strong>{code}:</strong> {item.treatment}</p> : null;
+                    })}
+                    <label className={`${labelClass} mt-3 block`}>Existing fixture condition
+                      <select className={fieldClass} value={line.conditionCode ?? ""} onChange={(event) => {
+                        const condition = conditionIdentifiers.find((item) => item.code === event.target.value);
+                        updateLine(index, "conditionCode", condition?.code ?? "");
+                      }}>
+                        <option value="">Not recorded</option>
+                        {conditionIdentifiers.map((item) => <option key={item.code} value={item.code}>{item.code} - {item.description}</option>)}
+                      </select>
+                    </label>
+                    {line.conditionCode && <p className="mt-2 text-xs text-on-surface-variant">{conditionIdentifiers.find((item) => item.code === line.conditionCode)?.treatment}</p>}
+                  </section>
+
+                  <section className="border-b border-outline-variant/15 px-4 py-4 sm:px-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-bold text-on-surface">Line photos <span className="font-normal text-on-surface-variant">({line.photoIds.length}/{maxLinePhotos})</span></h3>
@@ -1000,16 +1062,18 @@ export default function QuoteBuilder() {
                   <div className="grid min-w-0 grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2">
                     <section className="min-w-0 rounded-xl border border-outline-variant/15 bg-surface-container-low/30 p-4">
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <div><h3 className="text-sm font-bold text-on-surface">Existing fixture</h3><p className="mt-0.5 text-xs text-on-surface-variant">What is being replaced?</p></div>
+                        <div><h3 className="text-sm font-bold text-on-surface">Existing fixture</h3><p className="mt-0.5 text-xs text-on-surface-variant">What is currently installed or being audited?</p></div>
                         <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Current</span>
                       </div>
                       <label className={labelClass}>Fixture description
                         <input className={fieldClass} value={line.existingDescription} onChange={(event) => { updateLine(index, "existingDescription", event.target.value); searchSuggestions(index, event.target.value); }} placeholder="Describe the current light" />
                       </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
-                        <label className={labelClass}>Existing watts<input className={fieldClass} value={line.existingWatts} onChange={(event) => updateLine(index, "existingWatts", event.target.value)} placeholder="e.g. 150W" /></label>
+                        <label className={labelClass}>Existing input watts<input className={fieldClass} value={line.existingWatts} onChange={(event) => updateLine(index, "existingWatts", event.target.value)} placeholder="e.g. 190W" /></label>
                         <label className={labelClass}>Existing quantity<input type="number" min="0" className={fieldClass} value={line.existingQty || ""} onChange={(event) => updateLine(index, "existingQty", numberValue(event.target.value))} placeholder="0" /></label>
                       </div>
+                      {line.existingWattageReference && <p className="mt-2 text-xs text-on-surface-variant">Reference: {line.existingWattageReference}. Editing the description or watts clears this reference.</p>}
+                      <InputWattagePicker onSelect={(entry) => applyInputWattage(index, entry)} />
                       <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant">Enter at least 3 characters, then select a prior proposal or Warehouse match to apply it.</p>
                       {suggestions && <div className="mt-3 max-h-72 space-y-3 overflow-y-auto rounded-xl border border-outline-variant/20 bg-white p-3">
                         {suggestions.loading ? <p className="text-xs text-on-surface-variant">Searching proposal history and Warehouse pricing…</p> : suggestions.result ? <>
@@ -1024,15 +1088,15 @@ export default function QuoteBuilder() {
 
                     <section className="min-w-0 rounded-xl border border-primary/15 bg-primary/[0.025] p-4">
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <div><h3 className="text-sm font-bold text-on-surface">Proposed replacement</h3><p className="mt-0.5 text-xs text-on-surface-variant">What will be installed?</p></div>
+                        <div><h3 className="text-sm font-bold text-on-surface">Proposed work</h3><p className="mt-0.5 text-xs text-on-surface-variant">What fixture, control, or service is being quoted?</p></div>
                         <span className="rounded-full bg-primary/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">Proposed</span>
                       </div>
-                      <label className={labelClass}>Replacement fixture
-                        <input className={fieldClass} value={line.proposedDescription} onChange={(event) => updateLine(index, "proposedDescription", event.target.value)} placeholder="Fixture / model description" />
+                      <label className={labelClass}>Proposed fixture / scope
+                        <input className={fieldClass} value={line.proposedDescription} onChange={(event) => updateLine(index, "proposedDescription", event.target.value)} placeholder="Fixture, model, or work description" />
                       </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Proposed watts<input className={fieldClass} value={line.proposedWatts} onChange={(event) => updateLine(index, "proposedWatts", event.target.value)} placeholder="e.g. 40W" /></label>
-                        <label className={labelClass}>Install quantity<input type="number" min="0" className={fieldClass} value={line.proposedQty || ""} onChange={(event) => updateLine(index, "proposedQty", numberValue(event.target.value))} placeholder="0" /></label>
+                        <label className={labelClass}>Work quantity<input type="number" min="0" className={fieldClass} value={line.proposedQty || ""} onChange={(event) => updateLine(index, "proposedQty", numberValue(event.target.value))} placeholder="0" /></label>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Product unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.productCost || ""} onChange={(event) => updateLine(index, "productCost", numberValue(event.target.value))} placeholder="$0.00" /></label>

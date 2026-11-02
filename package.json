@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:quote": "node --import ./scripts/register-typescript-tests.mjs --test src/lib/quote-reference.test.ts"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

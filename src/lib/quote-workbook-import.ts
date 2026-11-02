@@ -2,6 +2,7 @@ import { unzipSync } from "fflate";
 import * as XLSX from "xlsx";
 
 import { emptyQuote, type Quote, type QuoteLine } from "@/lib/quote";
+import { parseConditionCode, parseWorkCodes } from "@/lib/quote-identifiers";
 
 const maxImportedPhotos = 50;
 const maxPhotoSize = 12 * 1024 * 1024;
@@ -164,18 +165,21 @@ function headerRowForQuote(sheet: XLSX.WorkSheet) {
       .filter((index) => index >= 0);
     const columns = {
       fixtureId: findColumn(headers, ["fixtureid"]),
+      workCodes: findColumn(headers, ["workcodes", "workidentifiers"]),
+      conditionCode: findColumn(headers, ["conditioncode", "existingcondition"]),
+      existingWattageReference: findColumn(headers, ["existingwattagereference"]),
       existingQty: findColumn(headers, ["existingfixtureqty", "existingqty"]),
       sharedQty: findColumn(headers, ["fixtureqty", "quantity", "qty", "count"]),
       location: findColumn(headers, ["locationdescription", "location"]),
-      existingDescription: findColumn(headers, ["existingfixturedescription", "existingfixturedescrption", "existingdescription"]),
+      existingDescription: findColumn(headers, ["existingfixturedescription", "existingfixturedescrption", "existingdescription", "existingfixture"]),
       existingWatts: findColumn(headers, ["existingwatts", "oldwatts"]) ?? wattsColumns[0],
       proposedQty: findColumn(headers, ["proposedfixtureqty", "proposedqty", "replacementqty"]),
-      proposedDescription: findColumn(headers, ["proposedfixturedescription", "proposedfixturedescrption", "proposeddescription", "replacementfixture"]),
+      proposedDescription: findColumn(headers, ["proposedfixturedescription", "proposedfixturedescrption", "proposeddescription", "replacementfixture", "proposedfixture"]),
       proposedWatts: findColumn(headers, ["proposedwatts", "replacementwatts", "newwatts"]) ?? wattsColumns.at(-1),
       height: findColumn(headers, ["height", "mountingheight"]),
       installNotes: findColumn(headers, ["installnotes", "notes"]),
       productCost: findColumn(headers, ["productcost", "unitproductcost"]),
-      laborCost: findColumn(headers, ["laborcost", "unitlaborcost"]),
+      laborCost: findColumn(headers, ["laborunitcost", "unitlaborcost", "laborcost"]),
       tax: findColumn(headers, ["tax", "salestax"]),
       productSell: findColumn(headers, ["extendedproductcost", "productsell", "markedupproduct"]),
       laborSell: findColumn(headers, ["markeduplabor", "laborsell", "extendedlabor"]),
@@ -277,7 +281,10 @@ function parseQuoteSheet(sheet: XLSX.WorkSheet, sheetName: string, fileName: str
     const productCost = numericValue(row[productCostColumn]) ?? 0;
     const laborCost = numericValue(row[laborCostColumn]) ?? 0;
     const fixtureId = textValue(row[columns.fixtureId ?? -1], 100);
-    if (!existingDescription && !proposedDescription && proposedQty <= 0 && productCost <= 0 && laborCost <= 0) continue;
+    const workCodes = parseWorkCodes(textValue(row[columns.workCodes ?? -1], 200));
+    const conditionCode = parseConditionCode(textValue(row[columns.conditionCode ?? -1], 100));
+    if (proposedDescription === "TOTAL" && !fixtureId && !existingDescription && !workCodes.length && !conditionCode) continue;
+    if (!existingDescription && !proposedDescription && !workCodes.length && !conditionCode && proposedQty <= 0 && productCost <= 0 && laborCost <= 0) continue;
     if (lines.length >= 3000) break;
     if (proposedQty < 0 || proposedQty > 100_000 || productCost < 0 || productCost > 1_000_000
       || laborCost < 0 || laborCost > 1_000_000) continue;
@@ -288,6 +295,9 @@ function parseQuoteSheet(sheet: XLSX.WorkSheet, sheetName: string, fileName: str
     lines.push({
       id: crypto.randomUUID(),
       fixtureId,
+      workCodes,
+      conditionCode,
+      existingWattageReference: textValue(row[columns.existingWattageReference ?? -1], 1200),
       address: "",
       location: textValue(row[columns.location ?? -1], 500),
       existingQty: Math.max(0, numericValue(row[existingQtyColumn]) ?? proposedQty),

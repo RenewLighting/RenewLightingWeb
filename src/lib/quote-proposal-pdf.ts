@@ -6,6 +6,7 @@ import sharp from "sharp";
 
 import { db, ensureQuoteTable } from "@/lib/db";
 import { calculateQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
+import { describeCondition, describeWorkCodes } from "@/lib/quote-identifiers";
 import { contact, siteName, siteUrl } from "@/lib/site";
 
 const PAGE_WIDTH = 612;
@@ -99,7 +100,7 @@ function drawScopeTable(
   drawTableHeader(document, y);
   y += 31;
   rows.forEach(({ line, sellTotal }, index) => {
-    const description = [getLineTitle(line), line.location.trim() && `Location: ${line.location.trim()}`]
+    const description = [getLineTitle(line), line.workCodes?.length ? `Work: ${describeWorkCodes(line.workCodes)}` : "", line.location.trim() && `Location: ${line.location.trim()}`]
       .filter(Boolean).join("\n");
     document.font("Helvetica").fontSize(9);
     const descriptionHeight = document.heightOfString(description, { width: 296, lineGap: 1 });
@@ -134,10 +135,13 @@ function drawLineCard(
   const textWidth = CONTENT_WIDTH - 26;
   const description = getLineTitle(line);
   const details = [
+    line.workCodes?.length ? `Work: ${describeWorkCodes(line.workCodes)}` : "",
+    line.conditionCode && `Existing condition: ${describeCondition(line.conditionCode)}`,
     `Quantity: ${line.proposedQty}${line.proposedWatts ? `  |  Wattage: ${line.proposedWatts}` : ""}${line.height ? `  |  Mounting height: ${line.height}` : ""}`,
     line.location && `Location: ${line.location}`,
     line.address && `Area: ${line.address}`,
-    line.existingDescription && `Existing: ${line.existingDescription}${line.existingQty ? ` (qty ${line.existingQty})` : ""}`,
+    line.existingDescription && `Existing: ${line.existingDescription}${line.existingQty ? ` (qty ${line.existingQty})` : ""}${line.existingWatts ? ` | Input wattage: ${line.existingWatts}` : ""}`,
+    line.existingWattageReference && `Input wattage reference: ${line.existingWattageReference}`,
     line.installNotes && `Installation notes: ${line.installNotes}`,
   ].filter((value): value is string => Boolean(value?.trim()));
   document.font("Helvetica").fontSize(8.5);
