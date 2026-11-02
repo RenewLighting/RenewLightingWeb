@@ -6,6 +6,7 @@ import Image from "next/image";
 
 import Icon from "@/components/Icon";
 import FixtureAutocomplete, { type FixtureAutocompleteOption } from "@/components/FixtureAutocomplete";
+import FixtureTypePicker from "@/components/FixtureTypePicker";
 import InputWattagePicker from "@/components/InputWattagePicker";
 import { wattageReference, type InputWattageEntry } from "@/lib/input-wattage";
 import { calculateEnergySavings, calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
@@ -1224,8 +1225,13 @@ export default function QuoteBuilder() {
                         />
                       </div>
                       <label className={`${labelClass} mt-3`}>Existing fixture type
-                        <input list={`existing-fixture-types-${line.id}`} className={fieldClass} value={line.existingFixtureType} onChange={(event) => updateLine(index, "existingFixtureType", event.target.value)} placeholder="Type or choose a fixture type" />
-                        <datalist id={`existing-fixture-types-${line.id}`}>{fixtureTypes.map((option) => <option key={option} value={option} />)}</datalist>
+                        <FixtureTypePicker
+                          value={line.existingFixtureType}
+                          onChange={(value) => updateLine(index, "existingFixtureType", value)}
+                          label={`Existing fixture type, line ${index + 1}`}
+                          options={fixtureTypes}
+                          className={fieldClass}
+                        />
                       </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Existing input watts<input className={fieldClass} value={line.existingWatts} onChange={(event) => updateLine(index, "existingWatts", event.target.value)} placeholder="e.g. 190W" /></label>
@@ -1255,10 +1261,13 @@ export default function QuoteBuilder() {
                         />
                       </div>
                       <label className={`${labelClass} mt-3`}>Proposed fixture type
-                        <select className={fieldClass} value={line.proposedFixtureType} onChange={(event) => updateLine(index, "proposedFixtureType", event.target.value)}>
-                          <option value="">Select type</option>
-                          {fixtureTypes.map((option) => <option key={option} value={option}>{option}</option>)}
-                        </select>
+                        <FixtureTypePicker
+                          value={line.proposedFixtureType}
+                          onChange={(value) => updateLine(index, "proposedFixtureType", value)}
+                          label={`Proposed fixture type, line ${index + 1}`}
+                          options={fixtureTypes}
+                          className={fieldClass}
+                        />
                       </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Proposed watts<input className={fieldClass} value={line.proposedWatts} onChange={(event) => updateLine(index, "proposedWatts", event.target.value)} placeholder="e.g. 40W" /></label>
