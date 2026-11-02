@@ -1,0 +1,122 @@
+export const fixtureTypes = [
+  "2x2 troffer",
+  "2x4 troffer",
+  "1x4 troffer",
+  "Flat panel",
+  "Linear strip",
+  "Wraparound",
+  "High bay",
+  "Low bay",
+  "Downlight / recessed can",
+  "Track light",
+  "Wall sconce",
+  "Vanity light",
+  "Undercabinet",
+  "Area / pole light",
+  "Flood / security light",
+  "Wall pack",
+  "Canopy / garage",
+  "Bollard / pathway",
+  "Landscape",
+  "Roadway / street",
+  "Parking garage",
+  "Sports lighting",
+  "Tunnel",
+  "Hazardous location",
+  "Vaportight",
+  "Pool / spa",
+  "Exit sign",
+  "Emergency lighting",
+  "Sign lighting",
+  "Lamp / retrofit kit",
+  "Multifamily",
+  "Other / custom",
+] as const;
+
+export const lightingTechnologies = [
+  "LED",
+  "Fluorescent",
+  "Metal halide",
+  "High-pressure sodium",
+  "Mercury vapor",
+  "Incandescent / halogen",
+  "Induction",
+  "Other / custom",
+] as const;
+
+export const mountingTypes = [
+  "Recessed",
+  "Surface",
+  "Suspended",
+  "Pendant",
+  "Wall-mounted",
+  "Pole-mounted",
+  "Canopy-mounted",
+  "Retrofit existing housing",
+  "In-ground",
+  "Landscape stake",
+  "Other / custom",
+] as const;
+
+export const lightDistributions = [
+  "Type I",
+  "Type II",
+  "Type III",
+  "Type IV",
+  "Type V",
+  "Narrow",
+  "Medium",
+  "Wide",
+  "Symmetric",
+  "Asymmetric",
+  "Wall wash",
+  "Flood",
+  "Spot",
+  "Other / custom",
+] as const;
+
+export const voltageOptions = [
+  "120V",
+  "120-277V",
+  "208V",
+  "240V",
+  "277V",
+  "347V",
+  "480V",
+  "12/24V",
+  "Other / custom",
+] as const;
+
+export const colorTemperatureOptions = [
+  "2700K",
+  "3000K",
+  "3500K",
+  "4000K",
+  "5000K",
+  "5700K",
+  "6500K",
+  "Tunable white",
+  "Other / custom",
+] as const;
+
+export const dimmingOptions = [
+  "Non-dimming",
+  "0-10V",
+  "Phase dimming",
+  "DALI",
+  "Step dimming",
+  "Wireless / networked",
+  "Other / custom",
+] as const;
+
+export const controlOptions = [
+  "None",
+  "Occupancy sensor",
+  "Vacancy sensor",
+  "Daylight / photocell",
+  "Time clock",
+  "Astronomical time clock",
+  "Bi-level control",
+  "Networked lighting controls",
+  "Other / custom",
+] as const;

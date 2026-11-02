@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { authOptions } from "@/lib/auth";
 import { db, ensureQuoteTable } from "@/lib/db";
 import { parseQuoteWorkbook } from "@/lib/quote-workbook-import";
-import type { Quote, QuoteLine } from "@/lib/quote";
+import { emptyEnergyAnalysis, type Quote, type QuoteLine } from "@/lib/quote";
 import { isConditionCode, isWorkCode } from "@/lib/quote-identifiers";
 
 export const dynamic = "force-dynamic";
@@ -349,10 +349,19 @@ function parsePreparedQuote(value: unknown): Quote | null {
       fixtureId: 100,
       address: 500,
       location: 500,
+      existingFixtureType: 120,
       existingDescription: 1000,
       existingWatts: 100,
+      proposedFixtureType: 120,
       proposedDescription: 1000,
       proposedWatts: 100,
+      technology: 120,
+      mountingType: 120,
+      distribution: 120,
+      voltage: 60,
+      colorTemperature: 60,
+      dimming: 120,
+      controlType: 120,
       productCostVendor: 200,
       productCostQuotedAt: 100,
       height: 100,
@@ -361,6 +370,14 @@ function parsePreparedQuote(value: unknown): Quote | null {
     const text = {} as Record<keyof typeof textLimits, string>;
     for (const [key, limit] of Object.entries(textLimits)) {
       const value = line[key];
+      if (value === undefined && key !== "id" && key !== "fixtureId"
+        && key !== "address" && key !== "location" && key !== "existingDescription"
+        && key !== "existingWatts" && key !== "proposedDescription" && key !== "proposedWatts"
+        && key !== "productCostVendor" && key !== "productCostQuotedAt"
+        && key !== "height" && key !== "installNotes") {
+        text[key as keyof typeof textLimits] = "";
+        continue;
+      }
       if (typeof value !== "string" || value.length > limit) return null;
       text[key as keyof typeof textLimits] = value;
     }
@@ -376,6 +393,17 @@ function parsePreparedQuote(value: unknown): Quote | null {
       const value = line[key];
       if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value >= 1)) return null;
     }
+    const annualOperatingHoursOverride = line.annualOperatingHoursOverride === undefined
+      ? null
+      : line.annualOperatingHoursOverride;
+    if (annualOperatingHoursOverride !== null
+      && (typeof annualOperatingHoursOverride !== "number"
+        || !Number.isFinite(annualOperatingHoursOverride)
+        || annualOperatingHoursOverride < 0
+        || annualOperatingHoursOverride > 8760)) return null;
+    const controlSavingsPercent = line.controlSavingsPercent === undefined ? 0 : line.controlSavingsPercent;
+    if (typeof controlSavingsPercent !== "number" || !Number.isFinite(controlSavingsPercent)
+      || controlSavingsPercent < 0 || controlSavingsPercent > 100) return null;
     for (const id of line.photoIds) {
       if (photoIds.has(id)) return null;
       photoIds.add(id);
@@ -395,12 +423,23 @@ function parsePreparedQuote(value: unknown): Quote | null {
       existingWattageReference: typeof line.existingWattageReference === "string" ? line.existingWattageReference : "",
       address: text.address,
       location: text.location,
+      existingFixtureType: text.existingFixtureType,
       existingQty: lineNumbers.existingQty,
       existingDescription: text.existingDescription,
       existingWatts: text.existingWatts,
+      annualOperatingHoursOverride,
+      proposedFixtureType: text.proposedFixtureType,
       proposedQty: lineNumbers.proposedQty,
       proposedDescription: text.proposedDescription,
       proposedWatts: text.proposedWatts,
+      technology: text.technology,
+      mountingType: text.mountingType,
+      distribution: text.distribution,
+      voltage: text.voltage,
+      colorTemperature: text.colorTemperature,
+      dimming: text.dimming,
+      controlType: text.controlType,
+      controlSavingsPercent,
       productCostSource: line.productCostSource,
       productCostVendor: text.productCostVendor,
       productCostQuotedAt: text.productCostQuotedAt,
@@ -418,6 +457,49 @@ function parsePreparedQuote(value: unknown): Quote | null {
   }
   if (photoIds.size > 50 || typeof input.projectName !== "string" || input.projectName.length > 200
     || typeof input.address !== "string" || input.address.length > 500) return null;
+  const defaultEnergyAnalysis = emptyEnergyAnalysis();
+  const rawEnergy = input.energyAnalysis;
+  let energyAnalysis = defaultEnergyAnalysis;
+  if (rawEnergy !== undefined) {
+    if (typeof rawEnergy !== "object" || rawEnergy === null || Array.isArray(rawEnergy)) return null;
+    const values = rawEnergy as Record<string, unknown>;
+    let invalidEnergyNumber = false;
+    const nullableNumber = (key: string, maximum = Number.MAX_SAFE_INTEGER) => {
+      const value = values[key];
+      if (value === undefined || value === null) return null;
+      if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > maximum) {
+        invalidEnergyNumber = true;
+        return null;
+      }
+      return value;
+    };
+    const annualOperatingHours = nullableNumber("annualOperatingHours", 8760);
+    const electricityRatePerKwh = nullableNumber("electricityRatePerKwh");
+    const demandChargePerKwMonth = nullableNumber("demandChargePerKwMonth");
+    const demandCoincidencePercent = nullableNumber("demandCoincidencePercent", 100);
+    const annualMaintenanceSavings = nullableNumber("annualMaintenanceSavings");
+    const estimatedIncentive = nullableNumber("estimatedIncentive");
+    const carbonEmissionKgPerKwh = nullableNumber("carbonEmissionKgPerKwh");
+    const analysisYears = values.analysisYears === undefined ? defaultEnergyAnalysis.analysisYears : values.analysisYears;
+    const electricityEscalationPercent = values.electricityEscalationPercent === undefined
+      ? defaultEnergyAnalysis.electricityEscalationPercent
+      : values.electricityEscalationPercent;
+    if (invalidEnergyNumber
+      || typeof analysisYears !== "number" || !Number.isSafeInteger(analysisYears) || analysisYears < 1 || analysisYears > 50
+      || typeof electricityEscalationPercent !== "number" || !Number.isFinite(electricityEscalationPercent)
+      || electricityEscalationPercent < 0 || electricityEscalationPercent > 30) return null;
+    energyAnalysis = {
+      annualOperatingHours,
+      electricityRatePerKwh,
+      demandChargePerKwMonth,
+      demandCoincidencePercent,
+      annualMaintenanceSavings,
+      estimatedIncentive,
+      analysisYears,
+      electricityEscalationPercent,
+      carbonEmissionKgPerKwh,
+    };
+  }
   return {
     projectName: input.projectName,
     address: input.address,
@@ -429,6 +511,7 @@ function parsePreparedQuote(value: unknown): Quote | null {
     shipping: Number(input.shipping),
     travel: Number(input.travel),
     miscellaneous: Number(input.miscellaneous),
+    energyAnalysis,
     lines,
   };
 }

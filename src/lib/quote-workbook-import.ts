@@ -1,7 +1,7 @@
 import { unzipSync } from "fflate";
 import * as XLSX from "xlsx";
 
-import { emptyQuote, type Quote, type QuoteLine } from "@/lib/quote";
+import { emptyEnergyAnalysis, emptyQuote, type Quote, type QuoteLine } from "@/lib/quote";
 import { parseConditionCode, parseWorkCodes } from "@/lib/quote-identifiers";
 
 const maxImportedPhotos = 50;
@@ -168,6 +168,8 @@ function headerRowForQuote(sheet: XLSX.WorkSheet) {
       workCodes: findColumn(headers, ["workcodes", "workidentifiers"]),
       conditionCode: findColumn(headers, ["conditioncode", "existingcondition"]),
       existingWattageReference: findColumn(headers, ["existingwattagereference"]),
+      existingFixtureType: findColumn(headers, ["existingfixturetype"]),
+      annualOperatingHoursOverride: findColumn(headers, ["annualoperatinghoursoverride", "existingannualoperatinghours"]),
       existingQty: findColumn(headers, ["existingfixtureqty", "existingqty"]),
       sharedQty: findColumn(headers, ["fixtureqty", "quantity", "qty", "count"]),
       location: findColumn(headers, ["locationdescription", "location"]),
@@ -175,7 +177,16 @@ function headerRowForQuote(sheet: XLSX.WorkSheet) {
       existingWatts: findColumn(headers, ["existingwatts", "oldwatts"]) ?? wattsColumns[0],
       proposedQty: findColumn(headers, ["proposedfixtureqty", "proposedqty", "replacementqty"]),
       proposedDescription: findColumn(headers, ["proposedfixturedescription", "proposedfixturedescrption", "proposeddescription", "replacementfixture", "proposedfixture"]),
+      proposedFixtureType: findColumn(headers, ["proposedfixturetype"]),
       proposedWatts: findColumn(headers, ["proposedwatts", "replacementwatts", "newwatts"]) ?? wattsColumns.at(-1),
+      technology: findColumn(headers, ["technology"]),
+      mountingType: findColumn(headers, ["mounting"]),
+      distribution: findColumn(headers, ["distribution"]),
+      voltage: findColumn(headers, ["voltage"]),
+      colorTemperature: findColumn(headers, ["colortemperature"]),
+      dimming: findColumn(headers, ["dimming"]),
+      controlType: findColumn(headers, ["controls"]),
+      controlSavingsPercent: findColumn(headers, ["controlsavingspercent"]),
       height: findColumn(headers, ["height", "mountingheight"]),
       installNotes: findColumn(headers, ["installnotes", "notes"]),
       productCost: findColumn(headers, ["productcost", "unitproductcost"]),
@@ -255,6 +266,31 @@ function photoRowsForSheet(sheet: XLSX.WorkSheet, lines: QuoteLine[]): PhotoShee
   return { rows: new Map<number, number>(), photoColumns: new Set<number>() };
 }
 
+function energySettingsFromWorkbook(workbook: XLSX.WorkBook) {
+  const sheetName = workbook.SheetNames.find((name) => headerKey(name) === "energysavings");
+  const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
+  if (!sheet) return emptyEnergyAnalysis();
+  const values = new Map<string, number>();
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
+  for (const row of rows) {
+    const key = headerKey(row[0]);
+    const value = numericValue(row[1]);
+    if (key && value !== null) values.set(key, value);
+  }
+  const read = (key: string) => values.get(headerKey(key)) ?? null;
+  return {
+    annualOperatingHours: read("Annual operating hours"),
+    electricityRatePerKwh: read("Electricity rate ($/kWh)"),
+    demandChargePerKwMonth: read("Demand charge ($/kW-month)"),
+    demandCoincidencePercent: read("Peak-demand coincidence (%)"),
+    annualMaintenanceSavings: read("Annual maintenance savings ($)"),
+    estimatedIncentive: read("Estimated incentive ($)"),
+    analysisYears: read("Analysis period (years)") ?? 10,
+    electricityEscalationPercent: read("Electricity price escalation (%/year)") ?? 0,
+    carbonEmissionKgPerKwh: read("Grid emissions factor (kg CO2e/kWh)"),
+  };
+}
+
 function parseQuoteSheet(sheet: XLSX.WorkSheet, sheetName: string, fileName: string, bytes: Uint8Array, workbook: XLSX.WorkBook) {
   const detected = headerRowForQuote(sheet);
   if (!detected) return { recognized: false as const };
@@ -298,6 +334,8 @@ function parseQuoteSheet(sheet: XLSX.WorkSheet, sheetName: string, fileName: str
       workCodes,
       conditionCode,
       existingWattageReference: textValue(row[columns.existingWattageReference ?? -1], 1200),
+      existingFixtureType: textValue(row[columns.existingFixtureType ?? -1], 120),
+      annualOperatingHoursOverride: numericValue(row[columns.annualOperatingHoursOverride ?? -1]),
       address: "",
       location: textValue(row[columns.location ?? -1], 500),
       existingQty: Math.max(0, numericValue(row[existingQtyColumn]) ?? proposedQty),
@@ -305,7 +343,16 @@ function parseQuoteSheet(sheet: XLSX.WorkSheet, sheetName: string, fileName: str
       existingWatts: textValue(row[columns.existingWatts ?? -1], 100),
       proposedQty,
       proposedDescription,
+      proposedFixtureType: textValue(row[columns.proposedFixtureType ?? -1], 120),
       proposedWatts: textValue(row[columns.proposedWatts ?? -1], 100),
+      technology: textValue(row[columns.technology ?? -1], 120),
+      mountingType: textValue(row[columns.mountingType ?? -1], 120),
+      distribution: textValue(row[columns.distribution ?? -1], 120),
+      voltage: textValue(row[columns.voltage ?? -1], 120),
+      colorTemperature: textValue(row[columns.colorTemperature ?? -1], 120),
+      dimming: textValue(row[columns.dimming ?? -1], 120),
+      controlType: textValue(row[columns.controlType ?? -1], 120),
+      controlSavingsPercent: numericValue(row[columns.controlSavingsPercent ?? -1]) ?? 0,
       productCostSource: "",
       productCostVendor: "",
       productCostQuotedAt: "",
@@ -360,6 +407,7 @@ function parseQuoteSheet(sheet: XLSX.WorkSheet, sheetName: string, fileName: str
     shipping,
     travel,
     miscellaneous,
+    energyAnalysis: energySettingsFromWorkbook(workbook),
     lines,
   };
   const lineRowsBySheet = new Map<string, PhotoSheetRows>();

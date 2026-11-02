@@ -7,8 +7,9 @@ import Image from "next/image";
 import Icon from "@/components/Icon";
 import InputWattagePicker from "@/components/InputWattagePicker";
 import { wattageReference, type InputWattageEntry } from "@/lib/input-wattage";
-import { calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
+import { calculateEnergySavings, calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
 import { conditionIdentifiers, describeCondition, describeWorkCodes, workIdentifiers, type WorkCode } from "@/lib/quote-identifiers";
+import { colorTemperatureOptions, controlOptions, dimmingOptions, fixtureTypes, lightDistributions, lightingTechnologies, mountingTypes, voltageOptions } from "@/lib/quote-fixture-options";
 import type { WarehouseQuoteSuggestion } from "@/lib/warehouse-quote-suggestions";
 import type { WorkbookPhoto } from "@/lib/quote-workbook-import";
 
@@ -114,6 +115,7 @@ function QuoteHistoryDetails({
   const quote: Quote = {
     ...emptyQuote(),
     ...saved.quote_data,
+    energyAnalysis: { ...emptyQuote().energyAnalysis, ...(saved.quote_data.energyAnalysis ?? {}) },
     lines: (saved.quote_data.lines || []).map((line) => ({
       ...emptyLine(),
       ...line,
@@ -269,6 +271,7 @@ async function deleteImportedPhotoUploads(photoIds: string[]) {
 
 export default function QuoteBuilder() {
   const [quote, setQuote] = useState<Quote>(emptyQuote);
+  const [activeTab, setActiveTab] = useState<"quote" | "energy">("quote");
   const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([]);
   const [hasMoreQuotes, setHasMoreQuotes] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -301,6 +304,7 @@ export default function QuoteBuilder() {
   const importFile = useRef<File | null>(null);
   const importPhotos = useRef<WorkbookPhoto[]>([]);
   const totals = calculateQuote(quote);
+  const energy = calculateEnergySavings(quote);
   const importQuoteTotals = importPreview?.quote ? calculateQuote(importPreview.quote) : null;
 
   function clearSuggestionSearch() {
@@ -600,6 +604,20 @@ export default function QuoteBuilder() {
     setQuote((current) => ({ ...current, [key]: value }));
   }
 
+  function updateEnergySetting<K extends keyof Quote["energyAnalysis"]>(
+    key: K,
+    value: Quote["energyAnalysis"][K],
+  ) {
+    setQuote((current) => ({
+      ...current,
+      energyAnalysis: {
+        ...emptyQuote().energyAnalysis,
+        ...current.energyAnalysis,
+        [key]: value,
+      },
+    }));
+  }
+
   function updateLine<K extends keyof QuoteLine>(index: number, key: K, value: QuoteLine[K]) {
     setAiRecommendations([]);
     setQuote((current) => ({
@@ -874,6 +892,7 @@ export default function QuoteBuilder() {
     setQuote((current) => ({
       ...current,
       ...saved.quote_data,
+      energyAnalysis: { ...emptyQuote().energyAnalysis, ...(saved.quote_data.energyAnalysis ?? {}) },
       lines,
     }));
     setSelectedQuoteId(id);
@@ -944,7 +963,12 @@ export default function QuoteBuilder() {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+        <div className="mb-5 flex flex-wrap gap-2 rounded-xl border border-outline-variant/20 bg-surface-container-lowest p-2" role="tablist" aria-label="Quote workspace">
+          <button type="button" role="tab" aria-selected={activeTab === "quote"} className={`rounded-lg px-5 py-3 text-sm font-bold ${activeTab === "quote" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container-low"}`} onClick={() => setActiveTab("quote")}>Quote details</button>
+          <button type="button" role="tab" aria-selected={activeTab === "energy"} className={`rounded-lg px-5 py-3 text-sm font-bold ${activeTab === "energy" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container-low"}`} onClick={() => setActiveTab("energy")}>Energy savings analysis</button>
+        </div>
+
+        {activeTab === "quote" && <div role="tabpanel" aria-label="Quote details" className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
           <section className="min-w-0 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/15 px-5 py-5 sm:px-6">
               <div className="min-w-0">
@@ -1073,6 +1097,12 @@ export default function QuoteBuilder() {
                       <label className={labelClass}>Fixture description
                         <input className={fieldClass} value={line.existingDescription} onChange={(event) => { updateLine(index, "existingDescription", event.target.value); searchSuggestions(index, event.target.value); }} placeholder="Describe the current light" />
                       </label>
+                      <label className={`${labelClass} mt-3`}>Existing fixture type
+                        <select className={fieldClass} value={line.existingFixtureType} onChange={(event) => updateLine(index, "existingFixtureType", event.target.value)}>
+                          <option value="">Select type</option>
+                          {fixtureTypes.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Existing input watts<input className={fieldClass} value={line.existingWatts} onChange={(event) => updateLine(index, "existingWatts", event.target.value)} placeholder="e.g. 190W" /></label>
                         <label className={labelClass}>Existing quantity<input type="number" min="0" className={fieldClass} value={line.existingQty || ""} onChange={(event) => updateLine(index, "existingQty", numberValue(event.target.value))} placeholder="0" /></label>
@@ -1099,14 +1129,37 @@ export default function QuoteBuilder() {
                       <label className={labelClass}>Proposed fixture / scope
                         <input className={fieldClass} value={line.proposedDescription} onChange={(event) => updateLine(index, "proposedDescription", event.target.value)} placeholder="Fixture, model, or work description" />
                       </label>
+                      <label className={`${labelClass} mt-3`}>Proposed fixture type
+                        <select className={fieldClass} value={line.proposedFixtureType} onChange={(event) => updateLine(index, "proposedFixtureType", event.target.value)}>
+                          <option value="">Select type</option>
+                          {fixtureTypes.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </label>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Proposed watts<input className={fieldClass} value={line.proposedWatts} onChange={(event) => updateLine(index, "proposedWatts", event.target.value)} placeholder="e.g. 40W" /></label>
                         <label className={labelClass}>Work quantity<input type="number" min="0" className={fieldClass} value={line.proposedQty || ""} onChange={(event) => updateLine(index, "proposedQty", numberValue(event.target.value))} placeholder="0" /></label>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-3">
+                        {([
+                          ["technology", "Technology", lightingTechnologies],
+                          ["mountingType", "Mounting", mountingTypes],
+                          ["distribution", "Distribution", lightDistributions],
+                          ["voltage", "Voltage", voltageOptions],
+                          ["colorTemperature", "Color temperature", colorTemperatureOptions],
+                          ["dimming", "Dimming", dimmingOptions],
+                          ["controlType", "Controls", controlOptions],
+                        ] as const).map(([key, label, options]) => <label key={key} className={labelClass}>{label}
+                          <select className={fieldClass} value={line[key]} onChange={(event) => updateLine(index, key, event.target.value)}>
+                            <option value="">Not specified</option>
+                            {options.map((option) => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </label>)}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
                         <label className={labelClass}>Product unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.productCost || ""} onChange={(event) => updateLine(index, "productCost", numberValue(event.target.value))} placeholder="$0.00" /></label>
                         <label className={labelClass}>Labor unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.laborCost || ""} onChange={(event) => updateLine(index, "laborCost", numberValue(event.target.value))} placeholder="$0.00" /></label>
                       </div>
+
                       {line.productCostSource && <p className="mt-2 text-[11px] text-on-surface-variant">{line.productCostSource === "warehouse_quote" ? `Warehouse quote: ${line.productCostVendor || "vendor not recorded"}${line.productCostQuotedAt ? ` · ${new Date(line.productCostQuotedAt).toLocaleDateString()}` : ""}` : `Prior proposal cost · used ${line.productCostPriorUseCount} time(s)`}</p>}
                       <label className={`${labelClass} mt-3`}>Installation notes
                         <textarea className={`${fieldClass} resize-y`} value={line.installNotes} onChange={(event) => updateLine(index, "installNotes", event.target.value)} placeholder="Optional notes for installation" rows={2} />
@@ -1141,7 +1194,111 @@ export default function QuoteBuilder() {
             <div className="border-t border-outline-variant/15 mt-6 pt-5 space-y-3 text-sm"><div className="flex justify-between"><span>Direct cost</span><strong>{money(totals.directCost)}</strong></div><div className="flex justify-between"><span>Contingency</span><strong>{money(totals.contingency)}</strong></div><div className="flex justify-between text-lg"><span>Sell total</span><strong className="text-primary">{money(totals.sellTotal)}</strong></div><div className="flex justify-between text-on-surface-variant"><span>Estimated profit</span><span>{money(totals.profit)} ({(totals.margin * 100).toFixed(1)}%)</span></div></div>
             <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" className="bg-on-surface text-surface px-3 py-3 rounded-xl text-sm font-bold" onClick={() => download("xlsx")}>Excel</button><button type="button" className="primary-gradient text-on-primary px-3 py-3 rounded-xl text-sm font-bold" onClick={() => download("pdf")}>Proposal PDF</button></div>
           </aside>
-        </div>
+        </div>}
+
+                      {activeTab === "energy" && <section role="tabpanel" aria-label="Energy savings analysis" className="space-y-6 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest p-5 sm:p-7">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div>
+                            <h2 className="font-headline text-2xl font-bold">Energy savings analysis</h2>
+                            <p className="mt-2 max-w-4xl text-sm leading-relaxed text-on-surface-variant">Estimates update from the fixture quantities and wattages in this quote. Enter verified site operating hours and the project electricity rate before using bill savings or payback. No utility rate, rebate, or control savings is assumed.</p>
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <button type="button" className="rounded-full bg-on-surface px-4 py-2 text-sm font-bold text-surface" onClick={() => download("xlsx")}>Excel</button>
+                            <button type="button" className="primary-gradient rounded-full px-4 py-2 text-sm font-bold text-on-primary" onClick={() => download("pdf")}>Proposal PDF</button>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          <label className="text-sm font-semibold">Annual operating hours (site default)
+                            <input type="number" min="0" max="8760" step="1" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.annualOperatingHours ?? ""} onChange={(event) => updateEnergySetting("annualOperatingHours", event.target.value === "" ? null : Math.max(0, Math.min(8760, numberValue(event.target.value))))} placeholder="Required for kWh" />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Use a project-specific schedule; line-level hours below can override it.</span>
+                          </label>
+                          <label className="text-sm font-semibold">Electricity rate ($/kWh)
+                            <input type="number" min="0" step="0.001" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.electricityRatePerKwh ?? ""} onChange={(event) => updateEnergySetting("electricityRatePerKwh", event.target.value === "" ? null : Math.max(0, numberValue(event.target.value)))} placeholder="Required for bill savings" />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Enter the applicable blended energy rate from the customer’s bill or tariff.</span>
+                          </label>
+                          <label className="text-sm font-semibold">Demand charge ($/kW-month)
+                            <input type="number" min="0" step="0.01" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.demandChargePerKwMonth ?? ""} onChange={(event) => updateEnergySetting("demandChargePerKwMonth", event.target.value === "" ? null : Math.max(0, numberValue(event.target.value)))} placeholder="Optional" />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Demand savings require both this value and a coincidence percentage.</span>
+                          </label>
+                          <label className="text-sm font-semibold">Peak-demand coincidence (%)
+                            <input type="number" min="0" max="100" step="1" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.demandCoincidencePercent ?? ""} onChange={(event) => updateEnergySetting("demandCoincidencePercent", event.target.value === "" ? null : Math.max(0, Math.min(100, numberValue(event.target.value))))} placeholder="Optional" />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Use a measured or utility-accepted estimate; do not assume all load reduction is coincident.</span>
+                          </label>
+                          <label className="text-sm font-semibold">Annual maintenance savings ($)
+                            <input type="number" min="0" step="0.01" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.annualMaintenanceSavings ?? ""} onChange={(event) => updateEnergySetting("annualMaintenanceSavings", event.target.value === "" ? null : Math.max(0, numberValue(event.target.value)))} placeholder="Optional verified estimate" />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Include only substantiated avoided lamp, ballast, or service costs.</span>
+                          </label>
+                          <label className="text-sm font-semibold">Estimated incentive ($)
+                            <input type="number" min="0" step="0.01" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.estimatedIncentive ?? ""} onChange={(event) => updateEnergySetting("estimatedIncentive", event.target.value === "" ? null : Math.max(0, numberValue(event.target.value)))} placeholder="Optional; verify eligibility" />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Estimate only; confirm program, eligibility, and funding before relying on it.</span>
+                          </label>
+                          <label className="text-sm font-semibold">Analysis period (years)
+                            <input type="number" min="1" max="50" step="1" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.analysisYears || 10} onChange={(event) => updateEnergySetting("analysisYears", Math.max(1, Math.min(50, Math.floor(numberValue(event.target.value) || 1))))} />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Lifetime values are undiscounted estimates over this period.</span>
+                          </label>
+                          <label className="text-sm font-semibold">Electricity price escalation (%/year)
+                            <input type="number" min="0" max="30" step="0.1" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.electricityEscalationPercent ?? 0} onChange={(event) => updateEnergySetting("electricityEscalationPercent", Math.max(0, Math.min(30, numberValue(event.target.value))))} />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Optional projection; zero escalation is used unless changed.</span>
+                          </label>
+                          <label className="text-sm font-semibold">Grid emissions factor (kg CO₂e/kWh)
+                            <input type="number" min="0" step="0.001" className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 font-normal" value={quote.energyAnalysis.carbonEmissionKgPerKwh ?? ""} onChange={(event) => updateEnergySetting("carbonEmissionKgPerKwh", event.target.value === "" ? null : Math.max(0, numberValue(event.target.value)))} placeholder="Optional regional factor" />
+                            <span className="mt-1 block text-xs font-normal text-on-surface-variant">Use a cited, region-appropriate factor if reporting emissions.</span>
+                          </label>
+                        </div>
+
+                        <div className="rounded-xl border border-outline-variant/20 bg-surface-container-low/40 p-4">
+                          <h3 className="font-headline font-bold">Line-level energy inputs</h3>
+                          <p className="mt-1 text-xs text-on-surface-variant">Enter input watts (not lamp wattage) and quantities on Quote details. A line override replaces the site hours. Control savings percentages are applied only to the proposed load.</p>
+                          <div className="mt-4 space-y-3">
+                            {quote.lines.map((line, index) => <div key={line.id} className="grid gap-3 rounded-lg border border-outline-variant/20 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_170px_170px] sm:items-end">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold">{line.proposedDescription || line.existingDescription || `Line ${index + 1}`}</p>
+                                <p className="mt-1 text-xs text-on-surface-variant">Existing {line.existingQty} × {line.existingWatts || "—"} → proposed {line.proposedQty} × {line.proposedWatts || "—"}</p>
+                              </div>
+                              <label className="text-xs font-semibold text-on-surface-variant">Operating hours override
+                                <input type="number" min="0" max="8760" step="1" className="mt-1 w-full rounded-lg border border-outline-variant/30 px-3 py-2 text-sm font-normal text-on-surface" value={line.annualOperatingHoursOverride ?? ""} onChange={(event) => updateLine(index, "annualOperatingHoursOverride", event.target.value === "" ? null : Math.max(0, Math.min(8760, numberValue(event.target.value))))} placeholder="Use site default" />
+                              </label>
+                              <label className="text-xs font-semibold text-on-surface-variant">Proposed control savings (%)
+                                <input type="number" min="0" max="100" step="1" className="mt-1 w-full rounded-lg border border-outline-variant/30 px-3 py-2 text-sm font-normal text-on-surface" value={line.controlSavingsPercent ?? 0} onChange={(event) => updateLine(index, "controlSavingsPercent", Math.max(0, Math.min(100, numberValue(event.target.value))))} />
+                              </label>
+                            </div>)}
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <div className="rounded-xl bg-surface-container-low p-4"><span className="text-xs text-on-surface-variant">Annual energy reduction</span><strong className="mt-1 block text-xl">{energy.annualKwhSavings === null ? "—" : `${energy.annualKwhSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}</strong></div>
+                          <div className="rounded-xl bg-surface-container-low p-4"><span className="text-xs text-on-surface-variant">Annual utility-bill savings</span><strong className="mt-1 block text-xl">{energy.annualEnergyCostSavings === null ? "—" : money(energy.annualEnergyCostSavings)}</strong></div>
+                          <div className="rounded-xl bg-surface-container-low p-4"><span className="text-xs text-on-surface-variant">Simple payback</span><strong className="mt-1 block text-xl">{energy.simplePaybackYears === null ? "—" : `${energy.simplePaybackYears.toFixed(1)} years`}</strong></div>
+                          <div className="rounded-xl bg-surface-container-low p-4"><span className="text-xs text-on-surface-variant">{energy.analysisYears}-year net savings</span><strong className="mt-1 block text-xl">{energy.lifetimeNetSavings === null ? "—" : money(energy.lifetimeNetSavings)}</strong></div>
+                        </div>
+                        {energy.missingInputs.length > 0 && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                          <h3 className="font-bold">Add fixture and hours data to calculate kWh</h3>
+                          <ul className="mt-2 list-inside list-disc space-y-1">{energy.missingInputs.map((item) => <li key={item}>{item}</li>)}</ul>
+                        </div>}
+                        {energy.financialMissingInputs.length > 0 && <div className="rounded-xl border border-outline-variant/30 bg-surface-container-low/50 p-4 text-sm text-on-surface-variant">
+                          <h3 className="font-bold text-on-surface">Dollar savings and payback are not yet shown</h3>
+                          <p className="mt-1">{energy.financialMissingInputs.join(" ")}</p>
+                        </div>}
+                        {energy.energyReady && <div className="overflow-x-auto rounded-xl border border-outline-variant/20">
+                          <table className="w-full min-w-[760px] text-left text-sm">
+                            <thead className="bg-surface-container-low text-xs uppercase tracking-wide text-on-surface-variant"><tr><th className="px-3 py-3">Line</th><th className="px-3 py-3 text-right">Existing kWh/year</th><th className="px-3 py-3 text-right">Proposed kWh/year</th><th className="px-3 py-3 text-right">Reduction kWh/year</th><th className="px-3 py-3 text-right">Energy bill savings/year</th></tr></thead>
+                            <tbody>{energy.lineResults.map((result, index) => <tr key={result.line.id} className="border-t border-outline-variant/15">
+                              <td className="px-3 py-3">{result.line.proposedDescription || result.line.existingDescription || `Line ${index + 1}`}</td>
+                              <td className="px-3 py-3 text-right">{result.existingAnnualKwh.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                              <td className="px-3 py-3 text-right">{result.proposedAnnualKwh.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                              <td className="px-3 py-3 text-right">{result.annualKwhSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                              <td className="px-3 py-3 text-right">{result.annualEnergyCostSavings === null ? "—" : money(result.annualEnergyCostSavings)}</td>
+                            </tr>)}</tbody>
+                          </table>
+                        </div>}
+                        {energy.financialReady && <div className="text-xs leading-relaxed text-on-surface-variant">
+                          <p>Annual total savings include {energy.annualDemandCostSavings === null ? "no demand savings (not fully specified)" : `${money(energy.annualDemandCostSavings)} of estimated demand-charge savings`}{energy.annualMaintenanceSavings === null ? " and no maintenance savings." : ` and ${money(energy.annualMaintenanceSavings)} in entered annual maintenance savings.`}</p>
+                          {energy.estimatedIncentive !== null && <p className="mt-1">Net investment reflects the entered estimated incentive of {money(energy.estimatedIncentive)}; eligibility and availability must be confirmed.</p>}
+                          <p className="mt-1">Payback is a simple estimate using the current quote sell total, less any entered incentive, divided by first-year total savings. Lifetime savings are undiscounted and do not guarantee future rates, operating schedules, rebates, or performance.</p>
+                          {energy.annualCarbonReductionTonnes !== null && <p className="mt-1">Estimated net emissions reduction: {energy.annualCarbonReductionTonnes.toFixed(2)} metric tonnes CO₂e/year based on the entered factor; a negative value indicates an increase.</p>}
+                        </div>}
+                      </section>}
       </div>
 
       {showHistory && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setShowHistory(false); setHistoryDetails(null); } }}>

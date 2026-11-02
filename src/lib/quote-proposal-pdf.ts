@@ -5,7 +5,7 @@ import PDFDocument from "pdfkit";
 import sharp from "sharp";
 
 import { db, ensureQuoteTable } from "@/lib/db";
-import { calculateQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
+import { calculateEnergySavings, calculateQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
 import { describeCondition, describeWorkCodes } from "@/lib/quote-identifiers";
 import { contact, siteName, siteUrl } from "@/lib/site";
 
@@ -137,13 +137,19 @@ function drawLineCard(
   const details = [
     line.workCodes?.length ? `Work: ${describeWorkCodes(line.workCodes)}` : "",
     line.conditionCode && `Existing condition: ${describeCondition(line.conditionCode)}`,
+    line.existingFixtureType && `Existing fixture type: ${line.existingFixtureType}`,
     `Quantity: ${line.proposedQty}${line.proposedWatts ? `  |  Wattage: ${line.proposedWatts}` : ""}${line.height ? `  |  Mounting height: ${line.height}` : ""}`,
+    [line.proposedFixtureType && `Type: ${line.proposedFixtureType}`, line.technology && `Technology: ${line.technology}`, line.mountingType && `Mounting: ${line.mountingType}`]
+      .filter(Boolean).join("  | "),
+    [line.distribution && `Distribution: ${line.distribution}`, line.voltage && `Voltage: ${line.voltage}`, line.colorTemperature && `CCT: ${line.colorTemperature}`, line.dimming && `Dimming: ${line.dimming}`, line.controlType && `Controls: ${line.controlType}`]
+      .filter(Boolean).join("  | "),
+    line.controlSavingsPercent > 0 && `Estimated control savings: ${line.controlSavingsPercent}%`,
     line.location && `Location: ${line.location}`,
     line.address && `Area: ${line.address}`,
     line.existingDescription && `Existing: ${line.existingDescription}${line.existingQty ? ` (qty ${line.existingQty})` : ""}${line.existingWatts ? ` | Input wattage: ${line.existingWatts}` : ""}`,
     line.existingWattageReference && `Input wattage reference: ${line.existingWattageReference}`,
     line.installNotes && `Installation notes: ${line.installNotes}`,
-  ].filter((value): value is string => Boolean(value?.trim()));
+  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
   document.font("Helvetica").fontSize(8.5);
   const detailHeight = details.reduce((sum, item) =>
     sum + document.heightOfString(item, { width: textWidth, lineGap: 1 }) + 4, 0);
@@ -233,6 +239,7 @@ export async function createQuoteProposalPdf(quote: Quote, ownerEmail: string) {
   ]);
   const logo = await sharp(logoSvg).resize(320, 320).png().toBuffer();
   const totals = calculateQuote(quote);
+  const energy = calculateEnergySavings(quote);
   const lineItemsTotal = totals.rows.reduce((sum, row) => sum + row.sellTotal, 0);
   const projectCostsAndContingency = totals.sellTotal - lineItemsTotal;
   const proposalDate = new Intl.DateTimeFormat("en-US", {
@@ -314,6 +321,90 @@ export async function createQuoteProposalPdf(quote: Quote, ownerEmail: string) {
   y = drawScopeTable(document, addPage, totals.rows, y);
   for (const [index, row] of totals.rows.entries()) {
     y = drawLineCard(document, logo, addPage, row.line, row.sellTotal, index, photos, y);
+  }
+
+  y = addPage("Energy Savings Analysis");
+  y = drawSectionTitle(document, "Energy savings analysis", y, "Estimated energy impacts based on fixture input watts, quantities, operating hours, and project assumptions supplied in the quote.");
+  if (energy.energyReady) {
+    const gap = 9;
+    const cardWidth = (CONTENT_WIDTH - gap * 2) / 3;
+    drawPriceCard(document, "Annual energy reduction", `${Math.round(energy.annualKwhSavings ?? 0).toLocaleString()} kWh`, LEFT, y, cardWidth);
+    drawPriceCard(document, "Annual bill savings", energy.annualEnergyCostSavings === null ? "Rate needed" : money(energy.annualEnergyCostSavings), LEFT + cardWidth + gap, y, cardWidth);
+    drawPriceCard(document, "Simple payback", energy.simplePaybackYears === null ? "Not calculated" : `${energy.simplePaybackYears.toFixed(1)} years`, LEFT + (cardWidth + gap) * 2, y, cardWidth);
+    y += 84;
+
+    const settings = quote.energyAnalysis;
+    const assumptions = [
+      `Operating hours: ${settings?.annualOperatingHours !== null && settings?.annualOperatingHours !== undefined ? `${settings.annualOperatingHours} hours/year` : "per-line values"}${settings?.electricityRatePerKwh !== null && settings?.electricityRatePerKwh !== undefined ? `  |  Electricity rate: $${settings.electricityRatePerKwh.toFixed(3)}/kWh` : "  |  Electricity rate: not entered"}`,
+      `Analysis period: ${energy.analysisYears} years, undiscounted${settings?.electricityEscalationPercent ? `  |  Energy price escalation: ${settings.electricityEscalationPercent}%/year` : ""}`,
+      `Demand savings: ${energy.annualDemandCostSavings === null ? "not calculated (demand charge and coincidence input required)" : `${money(energy.annualDemandCostSavings)}/year estimated`}`,
+      `Annual maintenance savings: ${energy.annualMaintenanceSavings === null ? "not entered" : `${money(energy.annualMaintenanceSavings)} entered estimate`}`,
+      `Estimated incentive: ${energy.estimatedIncentive === null ? "not entered" : `${money(energy.estimatedIncentive)} entered; eligibility to be verified`}`,
+      ...(energy.annualCarbonReductionTonnes === null ? [] : [`Avoided emissions: ${energy.annualCarbonReductionTonnes.toFixed(2)} metric tonnes CO2e/year using the entered factor`]),
+    ];
+    y = drawBulletList(document, assumptions, LEFT + 2, y, CONTENT_WIDTH - 4) + 10;
+
+    document.roundedRect(LEFT, y, CONTENT_WIDTH, 25, 4).fill(DARK_GREEN);
+    document.font("Helvetica-Bold").fontSize(8).fillColor("#FFFFFF");
+    document.text("FIXTURE / SCOPE", LEFT + 9, y + 8, { width: 220 });
+    document.text("EXISTING kWh", LEFT + 231, y + 8, { width: 70, align: "right" });
+    document.text("PROPOSED kWh", LEFT + 307, y + 8, { width: 76, align: "right" });
+    document.text("SAVINGS kWh", RIGHT - 96, y + 8, { width: 87, align: "right" });
+    y += 30;
+    for (const [index, row] of energy.lineResults.entries()) {
+      if (y + 27 > CONTENT_BOTTOM) {
+        y = addPage("Energy Savings Analysis");
+        document.roundedRect(LEFT, y, CONTENT_WIDTH, 25, 4).fill(DARK_GREEN);
+        document.font("Helvetica-Bold").fontSize(8).fillColor("#FFFFFF");
+        document.text("FIXTURE / SCOPE", LEFT + 9, y + 8, { width: 220 });
+        document.text("EXISTING kWh", LEFT + 231, y + 8, { width: 70, align: "right" });
+        document.text("PROPOSED kWh", LEFT + 307, y + 8, { width: 76, align: "right" });
+        document.text("SAVINGS kWh", RIGHT - 96, y + 8, { width: 87, align: "right" });
+        y += 30;
+      }
+      if (index % 2 === 0) document.rect(LEFT, y - 3, CONTENT_WIDTH, 25).fill("#F7F9F6");
+      document.font("Helvetica").fontSize(8).fillColor(TEXT)
+        .text((row.line.proposedDescription || row.line.existingDescription || `Line ${index + 1}`).slice(0, 62), LEFT + 9, y + 3, { width: 220, height: 20, ellipsis: true });
+      document.text(Math.round(row.existingAnnualKwh).toLocaleString(), LEFT + 231, y + 3, { width: 70, align: "right" });
+      document.text(Math.round(row.proposedAnnualKwh).toLocaleString(), LEFT + 307, y + 3, { width: 76, align: "right" });
+      document.text(Math.round(row.annualKwhSavings).toLocaleString(), RIGHT - 96, y + 3, { width: 87, align: "right" });
+      y += 25;
+    }
+    y += 14;
+    if (y + 115 > CONTENT_BOTTOM) {
+      y = addPage("Energy Savings Analysis");
+      y = drawSectionTitle(document, "Energy analysis (continued)", y);
+    }
+    if (energy.financialReady) {
+      const financialSummary = `Estimated first-year total savings: ${money(energy.annualTotalCostSavings ?? 0)}.${energy.netProjectInvestment === null ? "" : ` Net project investment after entered incentives: ${money(energy.netProjectInvestment)}.`} ${energy.lifetimeNetSavings === null ? "" : `${energy.analysisYears}-year net savings: ${money(energy.lifetimeNetSavings)} (undiscounted).`}`;
+      document.font("Helvetica-Bold").fontSize(9).fillColor(DARK_GREEN)
+        .text(financialSummary, LEFT, y, { width: CONTENT_WIDTH, lineGap: 2 });
+      y += document.heightOfString(financialSummary, { width: CONTENT_WIDTH, lineGap: 2 }) + 9;
+    }
+    document.font("Helvetica").fontSize(8).fillColor(MUTED)
+      .text("Estimates are based on the stated wattages, quantities, operating schedule, utility inputs, and control assumptions. Actual savings vary with site conditions, usage, tariffs, equipment performance, and incentive approval. Demand savings are excluded unless both demand charge and peak coincidence were supplied. A negative emissions result indicates an increase. Lifetime values are undiscounted and are not a guarantee of savings or payback.", LEFT, y, {
+        width: CONTENT_WIDTH,
+        lineGap: 2,
+      });
+  } else {
+    const visibleMissingInputs = energy.missingInputs.slice(0, 8);
+    y = drawBulletList(document, visibleMissingInputs, LEFT + 2, y, CONTENT_WIDTH - 4) + 12;
+    if (energy.missingInputs.length > visibleMissingInputs.length) {
+      const additionalItems = energy.missingInputs.length - visibleMissingInputs.length;
+      document.font("Helvetica").fontSize(9).fillColor(MUTED)
+        .text(`${additionalItems} additional line(s) also require input corrections.`, LEFT + 15, y, { width: CONTENT_WIDTH - 30 });
+      y += 18;
+    }
+    if (y + 90 > CONTENT_BOTTOM) {
+      y = addPage("Energy Savings Analysis");
+      y = drawSectionTitle(document, "Energy analysis (continued)", y);
+    }
+    const pending = "Energy savings are not calculated because fixture input watts, quantities, or operating hours are incomplete. Add these project-specific values in the quote before presenting estimated kWh, utility-bill savings, or payback.";
+    document.roundedRect(LEFT, y, CONTENT_WIDTH, 70, 6).fill("#F7F9F6");
+    document.font("Helvetica").fontSize(10).fillColor(TEXT).text(pending, LEFT + 14, y + 14, {
+      width: CONTENT_WIDTH - 28,
+      lineGap: 3,
+    });
   }
 
   y = addPage("Inclusions & Exclusions");
