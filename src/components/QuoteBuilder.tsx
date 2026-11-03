@@ -11,7 +11,7 @@ import InputWattagePicker from "@/components/InputWattagePicker";
 import { wattageReference, type InputWattageEntry } from "@/lib/input-wattage";
 import { calculateEnergySavings, calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
 import { conditionIdentifiers, describeCondition, describeWorkCodes, workIdentifiers, type WorkCode } from "@/lib/quote-identifiers";
-import { colorTemperatureOptions, controlOptions, dimmingOptions, fixtureTypes, lightDistributions, lightingTechnologies, matchFixtureDescriptionExamples, mountingTypes, voltageOptions } from "@/lib/quote-fixture-options";
+import { colorTemperatureOptions, controlOptions, dimmingOptions, fixtureTypes, lightDistributions, lightingTechnologies, matchesFixtureCategory, matchFixtureDescriptionExamples, mountingTypes, relatedFixtureTypes, voltageOptions } from "@/lib/quote-fixture-options";
 import type { WarehouseQuoteSuggestion } from "@/lib/warehouse-quote-suggestions";
 import type { WorkbookPhoto } from "@/lib/quote-workbook-import";
 
@@ -1016,42 +1016,6 @@ export default function QuoteBuilder() {
         </div>
 
         {activeTab === "quote" && <div role="tabpanel" aria-label="Quote details" className="space-y-4">
-          <section className="rounded-2xl border border-primary/15 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="mb-3 font-headline text-lg font-bold">Quote summary</h2>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))]">
-              <div className="rounded-xl bg-primary p-4 text-on-primary">
-                <span className="text-xs font-semibold uppercase tracking-wide text-on-primary/75">Sell total</span>
-                <strong className="mt-1 block font-headline text-3xl">{money(totals.sellTotal)}</strong>
-                <span className="mt-1 block text-xs text-on-primary/75">{quote.lines.length} quote line{quote.lines.length === 1 ? "" : "s"}</span>
-              </div>
-              {[
-                ["Direct cost", money(totals.directCost)],
-                ["Contingency", money(totals.contingency)],
-                ["Estimated profit", `${money(totals.profit)} · ${(totals.margin * 100).toFixed(1)}% margin`],
-              ].map(([label, amount]) => <div key={label} className="flex flex-col justify-center rounded-xl bg-surface-container-low px-4 py-3">
-                <span className="text-xs text-on-surface-variant">{label}</span>
-                <strong className="mt-1 text-lg">{amount}</strong>
-              </div>)}
-            </div>
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
-              <details className="rounded-xl border border-outline-variant/20">
-                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Project costs <span className="text-xs font-normal text-on-surface-variant">· Optional</span></summary>
-                <div className="grid gap-3 border-t border-outline-variant/15 p-3 sm:grid-cols-3">{([["shipping", "Shipping"], ["travel", "Travel"], ["miscellaneous", "Miscellaneous"]] as const).map(([key, label]) => <label key={key} className="text-sm font-semibold">{label}<input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={quote[key] || ""} onChange={(event) => updateQuote(key, numberValue(event.target.value))} /></label>)}</div>
-              </details>
-              <details className="rounded-xl border border-outline-variant/20">
-                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Formula settings <span className="text-xs font-normal text-on-surface-variant">· Advanced</span></summary>
-                <div className="border-t border-outline-variant/15 p-3">
-                  <div className="flex items-start justify-between gap-3"><p className="text-xs leading-relaxed text-on-surface-variant">Business rules used to calculate quote totals and exports.</p><button type="button" className="shrink-0 text-xs font-bold text-primary hover:underline" onClick={resetFormulaSettings}>Reset</button></div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{formulaFields.map(({ key, label, description, suffix }) => <label key={key} className="text-sm font-semibold">{label}<span className="ml-1 text-on-surface-variant">({suffix})</span><input type="number" min="0" max="99.99" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={(quote[key] as number) * 100} onChange={(event) => updateQuote(key, numberValue(event.target.value) / 100)} /><span className="mt-1 block text-xs font-normal leading-relaxed text-on-surface-variant">{description}</span></label>)}</div>
-                </div>
-              </details>
-            </div>
-            <div className="mt-3 flex flex-wrap justify-end gap-2">
-              <button type="button" className="rounded-xl border border-outline-variant/30 bg-white px-4 py-2.5 text-sm font-bold text-on-surface transition hover:bg-surface-container-low" onClick={() => download("xlsx")}>Export Excel</button>
-              <button type="button" className="primary-gradient rounded-xl px-4 py-2.5 text-sm font-bold text-on-primary shadow-sm transition hover:brightness-105" onClick={() => download("pdf")}>Proposal PDF</button>
-            </div>
-          </section>
-
           <section className="min-w-0 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/15 px-5 py-5 sm:px-6">
               <div className="min-w-0">
@@ -1071,6 +1035,8 @@ export default function QuoteBuilder() {
                 const proposedSuggestions = suggestionState?.lineIndex === index && suggestionState.field === "proposed" ? suggestionState : null;
                 const lineAI = aiRecommendations.filter((item) => item.lineIndex === index);
                 const lineNeedsDetails = !line.proposedDescription.trim() || line.proposedQty <= 0;
+                const proposedFixtureTypeOptions = relatedFixtureTypes(line.existingFixtureType);
+                const isMatchingFixture = (candidate: string) => matchesFixtureCategory(candidate, line.existingFixtureType);
                 const fieldClass = "mt-1.5 w-full min-w-0 rounded-xl border border-outline-variant/30 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
                 const labelClass = "block min-w-0 text-xs font-semibold text-on-surface-variant";
                 const existingAutocompleteOptions = uniqueFixtureAutocompleteOptions([
@@ -1106,7 +1072,7 @@ export default function QuoteBuilder() {
                   })),
                 ]);
                 const proposedAutocompleteOptions = uniqueFixtureAutocompleteOptions([
-                  ...matchFixtureDescriptionExamples(line.proposedDescription).map((description) => ({
+                  ...matchFixtureDescriptionExamples(line.proposedDescription).filter(isMatchingFixture).map((description) => ({
                     id: `proposed-example-${description}`,
                     group: line.proposedDescription ? "Common descriptions" : "Common fixture descriptions",
                     label: description,
@@ -1115,14 +1081,14 @@ export default function QuoteBuilder() {
                       clearSuggestionSearch();
                     },
                   })),
-                  ...(proposedSuggestions?.result?.proposedFixtures ?? []).map((suggestion) => ({
+                  ...(proposedSuggestions?.result?.proposedFixtures ?? []).filter((suggestion) => isMatchingFixture(`${suggestion.fixtureType || ""} ${suggestion.description}`)).map((suggestion) => ({
                     id: `proposed-history-${suggestion.description}`,
                     group: "Matching prior proposed fixtures",
                     label: suggestion.description,
                     detail: [suggestion.fixtureType, suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`, suggestion.latestCost !== null && suggestion.latestCost > 0 ? `${money(suggestion.latestCost)} recorded unit cost` : ""].filter(Boolean).join(" · "),
                     onSelect: () => applyHistorySuggestion(index, suggestion),
                   })),
-                  ...(proposedSuggestions?.result?.warehouse ?? []).map((suggestion) => ({
+                  ...(proposedSuggestions?.result?.warehouse ?? []).filter((suggestion) => isMatchingFixture([suggestion.category, suggestion.name, suggestion.model_number].filter(Boolean).join(" "))).map((suggestion) => ({
                     id: `proposed-warehouse-${suggestion.id}`,
                     group: "Matching Warehouse products",
                     label: [suggestion.name, suggestion.model_number].filter(Boolean).join(" · "),
@@ -1300,10 +1266,11 @@ export default function QuoteBuilder() {
                           value={line.proposedFixtureType}
                           onChange={(value) => updateLine(index, "proposedFixtureType", value)}
                           label={`Proposed fixture type, line ${index + 1}`}
-                          options={fixtureTypes}
+                          options={proposedFixtureTypeOptions}
                           className={fieldClass}
                         />
                       </label>
+                      {line.existingFixtureType && <p className="text-[11px] text-emerald-900/75 xl:col-span-2">Proposed fixture options are filtered to match the existing {line.existingFixtureType} category. You can still type a custom type or description.</p>}
                       <div className="grid grid-cols-2 gap-3 xl:col-span-2">
                         <label className={labelClass}>Proposed watts<input className={fieldClass} value={line.proposedWatts} onChange={(event) => updateLine(index, "proposedWatts", event.target.value)} placeholder="e.g. 40W" /></label>
                         <label className={labelClass}>Work quantity<input type="number" min="0" className={fieldClass} value={line.proposedQty || ""} onChange={(event) => updateLine(index, "proposedQty", numberValue(event.target.value))} placeholder="0" /></label>
@@ -1356,6 +1323,41 @@ export default function QuoteBuilder() {
                   </div>
                 </article>;
               })}
+            </div>
+          </section>
+          <section className="rounded-2xl border border-primary/15 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-3 font-headline text-lg font-bold">Quote summary</h2>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))]">
+              <div className="rounded-xl bg-primary p-4 text-on-primary">
+                <span className="text-xs font-semibold uppercase tracking-wide text-on-primary/75">Sell total</span>
+                <strong className="mt-1 block font-headline text-3xl">{money(totals.sellTotal)}</strong>
+                <span className="mt-1 block text-xs text-on-primary/75">{quote.lines.length} quote line{quote.lines.length === 1 ? "" : "s"}</span>
+              </div>
+              {[
+                ["Direct cost", money(totals.directCost)],
+                ["Contingency", money(totals.contingency)],
+                ["Estimated profit", `${money(totals.profit)} · ${(totals.margin * 100).toFixed(1)}% margin`],
+              ].map(([label, amount]) => <div key={label} className="flex flex-col justify-center rounded-xl bg-surface-container-low px-4 py-3">
+                <span className="text-xs text-on-surface-variant">{label}</span>
+                <strong className="mt-1 text-lg">{amount}</strong>
+              </div>)}
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <details className="rounded-xl border border-outline-variant/20">
+                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Project costs <span className="text-xs font-normal text-on-surface-variant">· Optional</span></summary>
+                <div className="grid gap-3 border-t border-outline-variant/15 p-3 sm:grid-cols-3">{([["shipping", "Shipping"], ["travel", "Travel"], ["miscellaneous", "Miscellaneous"]] as const).map(([key, label]) => <label key={key} className="text-sm font-semibold">{label}<input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={quote[key] || ""} onChange={(event) => updateQuote(key, numberValue(event.target.value))} /></label>)}</div>
+              </details>
+              <details className="rounded-xl border border-outline-variant/20">
+                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Formula settings <span className="text-xs font-normal text-on-surface-variant">· Advanced</span></summary>
+                <div className="border-t border-outline-variant/15 p-3">
+                  <div className="flex items-start justify-between gap-3"><p className="text-xs leading-relaxed text-on-surface-variant">Business rules used to calculate quote totals and exports.</p><button type="button" className="shrink-0 text-xs font-bold text-primary hover:underline" onClick={resetFormulaSettings}>Reset</button></div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{formulaFields.map(({ key, label, description, suffix }) => <label key={key} className="text-sm font-semibold">{label}<span className="ml-1 text-on-surface-variant">({suffix})</span><input type="number" min="0" max="99.99" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={(quote[key] as number) * 100} onChange={(event) => updateQuote(key, numberValue(event.target.value) / 100)} /><span className="mt-1 block text-xs font-normal leading-relaxed text-on-surface-variant">{description}</span></label>)}</div>
+                </div>
+              </details>
+            </div>
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <button type="button" className="rounded-xl border border-outline-variant/30 bg-white px-4 py-2.5 text-sm font-bold text-on-surface transition hover:bg-surface-container-low" onClick={() => download("xlsx")}>Export Excel</button>
+              <button type="button" className="primary-gradient rounded-xl px-4 py-2.5 text-sm font-bold text-on-primary shadow-sm transition hover:brightness-105" onClick={() => download("pdf")}>Proposal PDF</button>
             </div>
           </section>
         </div>}

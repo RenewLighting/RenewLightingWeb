@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 
 import { inputWattageEntries, searchInputWattage, wattageReference } from "@/lib/input-wattage";
 import { calculateEnergySavings, calculateQuote, emptyLine, emptyQuote } from "@/lib/quote";
-import { fixtureDescriptionExamples, fixtureTypes, matchFixtureDescriptionExamples } from "@/lib/quote-fixture-options";
+import { fixtureDescriptionExamples, fixtureTypes, matchesFixtureCategory, matchFixtureDescriptionExamples, relatedFixtureTypes } from "@/lib/quote-fixture-options";
 import { conditionIdentifiers, parseConditionCode, parseWorkCodes, workIdentifiers } from "@/lib/quote-identifiers";
 import { createQuoteWorkbook } from "@/lib/quote-workbook";
 import { parseQuoteWorkbook } from "@/lib/quote-workbook-import";
@@ -30,6 +30,14 @@ test("fixture description autocomplete provides searchable, editable fixture exa
   assert.ok(matchFixtureDescriptionExamples("2x4").includes("2x4 troffer"));
   assert.ok(matchFixtureDescriptionExamples("LED high bay").includes("LED high-bay fixture"));
   assert.deepEqual(matchFixtureDescriptionExamples("fixture-does-not-exist"), []);
+});
+
+test("fixture categories narrow proposed types and suggestions to matching fixture families", () => {
+  assert.deepEqual(relatedFixtureTypes("2x4 troffer"), ["2x2 troffer", "2x4 troffer", "1x4 troffer", "Flat panel"]);
+  assert.ok(matchesFixtureCategory("LED flat panel", "2x4 troffer"));
+  assert.ok(!matchesFixtureCategory("LED high-bay fixture", "2x4 troffer"));
+  assert.ok(matchesFixtureCategory("LED high-bay fixture", "High bay"));
+  assert.equal(relatedFixtureTypes("Custom existing fixture").length, fixtureTypes.length);
 });
 
 test("the PNG identifiers stay distinct and reject unknown codes", () => {

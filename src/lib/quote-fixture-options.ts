@@ -33,6 +33,77 @@ export const fixtureTypes = [
   "Other / custom",
 ] as const;
 
+const fixtureTypeFamilies: Record<string, string> = {
+  "2x2 troffer": "troffer",
+  "2x4 troffer": "troffer",
+  "1x4 troffer": "troffer",
+  "Flat panel": "troffer",
+  "Linear strip": "linear",
+  "Wraparound": "linear",
+  "High bay": "bay",
+  "Low bay": "bay",
+  "Downlight / recessed can": "downlight",
+  "Track light": "track",
+  "Wall sconce": "interior",
+  "Vanity light": "interior",
+  Undercabinet: "interior",
+  "Area / pole light": "site",
+  "Flood / security light": "site",
+  "Wall pack": "site",
+  "Canopy / garage": "site",
+  "Bollard / pathway": "site",
+  Landscape: "site",
+  "Roadway / street": "site",
+  "Parking garage": "site",
+  "Sports lighting": "site",
+  Tunnel: "site",
+  "Hazardous location": "specialty",
+  Vaportight: "specialty",
+  "Pool / spa": "specialty",
+  "Exit sign": "life-safety",
+  "Emergency lighting": "life-safety",
+  "Sign lighting": "sign",
+  "Lamp / retrofit kit": "retrofit",
+  Multifamily: "interior",
+};
+
+const fixtureDescriptionFamilyTerms: Record<string, string[]> = {
+  troffer: ["troffer", "panel"],
+  linear: ["linear", "strip", "wraparound"],
+  bay: ["high bay", "high-bay", "low bay", "low-bay"],
+  downlight: ["downlight", "recessed", "can light"],
+  track: ["track"],
+  interior: ["sconce", "vanity", "undercabinet", "multifamily", "common-area"],
+  site: ["area light", "pole light", "floodlight", "flood light", "security light", "wall pack", "canopy", "bollard", "pathway", "landscape", "roadway", "streetlight", "parking garage", "sports lighting", "tunnel"],
+  specialty: ["hazardous", "vaportight", "pool", "spa"],
+  "life-safety": ["exit sign", "emergency"],
+  sign: ["sign light"],
+  retrofit: ["lamp", "retrofit"],
+};
+
+export function fixtureCategoryFamily(value: string) {
+  const normalized = value.trim().toLocaleLowerCase();
+  const matchedType = fixtureTypes.find((type) => type.toLocaleLowerCase() === normalized);
+  if (matchedType) return fixtureTypeFamilies[matchedType] ?? null;
+
+  for (const [family, terms] of Object.entries(fixtureDescriptionFamilyTerms)) {
+    if (terms.some((term) => normalized.includes(term))) return family;
+  }
+  return null;
+}
+
+export function relatedFixtureTypes(category: string) {
+  const family = fixtureCategoryFamily(category);
+  return family
+    ? fixtureTypes.filter((type) => fixtureTypeFamilies[type] === family)
+    : fixtureTypes;
+}
+
+export function matchesFixtureCategory(candidate: string, category: string) {
+  const family = fixtureCategoryFamily(category);
+  return !family || fixtureCategoryFamily(candidate) === family;
+}
+
 export const fixtureDescriptionExamples = [
   "1x4 troffer",
   "2x2 troffer",
