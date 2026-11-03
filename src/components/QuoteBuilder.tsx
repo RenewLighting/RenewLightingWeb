@@ -973,7 +973,7 @@ export default function QuoteBuilder() {
   return (
     <main className="min-h-screen bg-surface-container-low">
       <header className="border-b border-outline-variant/20 bg-surface-container-lowest">
-        <div className="mx-auto flex min-h-20 max-w-[1500px] flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10">
+        <div className="mx-auto flex min-h-20 max-w-[1800px] flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-primary">Renew Workspace</p>
             <h1 className="font-headline text-2xl font-extrabold">Quote Builder</h1>
@@ -997,19 +997,16 @@ export default function QuoteBuilder() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-[1800px] px-3 py-5 sm:px-5 lg:px-8 lg:py-6">
         {storageStatus && <p className="mb-4 rounded-xl border border-outline-variant/20 bg-white px-4 py-3 text-sm text-on-surface-variant shadow-sm" role="status">{storageStatus}</p>}
         <section className="mb-5 overflow-hidden rounded-2xl border border-primary/15 bg-white shadow-sm">
           <div className="h-1.5 bg-gradient-to-r from-primary via-primary-container to-secondary" />
-          <div className="grid grid-cols-1 gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2 lg:items-end">
             <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">Project name<input className="mt-2 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-sm font-medium normal-case tracking-normal text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10" value={quote.projectName} onChange={(event) => updateQuote("projectName", event.target.value)} placeholder="Name this project" /></label>
-              <label className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">Project address<input className="mt-2 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-sm font-medium normal-case tracking-normal text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10" value={quote.address} onChange={(event) => updateQuote("address", event.target.value)} placeholder="Site address" /></label>
+              <label className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">Project name<input className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-sm font-medium normal-case tracking-normal text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10" value={quote.projectName} onChange={(event) => updateQuote("projectName", event.target.value)} placeholder="Name this project" /></label>
+              <label className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">Project address<input className="mt-1.5 w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-sm font-medium normal-case tracking-normal text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10" value={quote.address} onChange={(event) => updateQuote("address", event.target.value)} placeholder="Site address" /></label>
             </div>
-            <div className="flex items-center justify-between gap-6 rounded-xl bg-primary/[0.05] px-4 py-3 lg:min-w-64">
-              <div><p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Current quote total</p><p className="mt-1 font-headline text-2xl font-extrabold text-primary">{money(totals.sellTotal)}</p></div>
-              <div className="text-right"><p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Quote lines</p><p className="mt-1 text-lg font-bold text-on-surface">{quote.lines.length}</p></div>
-            </div>
+            <p className="self-end text-right text-xs text-on-surface-variant">{quote.lines.length} quote line{quote.lines.length === 1 ? "" : "s"}</p>
           </div>
         </section>
 
@@ -1018,7 +1015,43 @@ export default function QuoteBuilder() {
           <button type="button" role="tab" aria-selected={activeTab === "energy"} className={`flex items-center gap-2 rounded-xl border px-5 py-3 text-sm font-bold transition ${activeTab === "energy" ? "border-primary bg-primary text-on-primary shadow-sm" : "border-outline-variant/30 bg-white text-on-surface-variant hover:border-primary/40 hover:bg-primary/[0.03]"}`} onClick={() => setActiveTab("energy")}><span>02</span> Energy analysis {energy.annualKwhSavings !== null && <span className={`rounded-full px-2 py-0.5 text-xs ${activeTab === "energy" ? "bg-white/15" : "bg-surface-container-low"}`}>{energy.annualKwhSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh</span>}</button>
         </div>
 
-        {activeTab === "quote" && <div role="tabpanel" aria-label="Quote details" className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+        {activeTab === "quote" && <div role="tabpanel" aria-label="Quote details" className="space-y-4">
+          <section className="rounded-2xl border border-primary/15 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-3 font-headline text-lg font-bold">Quote summary</h2>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))]">
+              <div className="rounded-xl bg-primary p-4 text-on-primary">
+                <span className="text-xs font-semibold uppercase tracking-wide text-on-primary/75">Sell total</span>
+                <strong className="mt-1 block font-headline text-3xl">{money(totals.sellTotal)}</strong>
+                <span className="mt-1 block text-xs text-on-primary/75">{quote.lines.length} quote line{quote.lines.length === 1 ? "" : "s"}</span>
+              </div>
+              {[
+                ["Direct cost", money(totals.directCost)],
+                ["Contingency", money(totals.contingency)],
+                ["Estimated profit", `${money(totals.profit)} · ${(totals.margin * 100).toFixed(1)}% margin`],
+              ].map(([label, amount]) => <div key={label} className="flex flex-col justify-center rounded-xl bg-surface-container-low px-4 py-3">
+                <span className="text-xs text-on-surface-variant">{label}</span>
+                <strong className="mt-1 text-lg">{amount}</strong>
+              </div>)}
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <details className="rounded-xl border border-outline-variant/20">
+                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Project costs <span className="text-xs font-normal text-on-surface-variant">· Optional</span></summary>
+                <div className="grid gap-3 border-t border-outline-variant/15 p-3 sm:grid-cols-3">{([["shipping", "Shipping"], ["travel", "Travel"], ["miscellaneous", "Miscellaneous"]] as const).map(([key, label]) => <label key={key} className="text-sm font-semibold">{label}<input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={quote[key] || ""} onChange={(event) => updateQuote(key, numberValue(event.target.value))} /></label>)}</div>
+              </details>
+              <details className="rounded-xl border border-outline-variant/20">
+                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Formula settings <span className="text-xs font-normal text-on-surface-variant">· Advanced</span></summary>
+                <div className="border-t border-outline-variant/15 p-3">
+                  <div className="flex items-start justify-between gap-3"><p className="text-xs leading-relaxed text-on-surface-variant">Business rules used to calculate quote totals and exports.</p><button type="button" className="shrink-0 text-xs font-bold text-primary hover:underline" onClick={resetFormulaSettings}>Reset</button></div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{formulaFields.map(({ key, label, description, suffix }) => <label key={key} className="text-sm font-semibold">{label}<span className="ml-1 text-on-surface-variant">({suffix})</span><input type="number" min="0" max="99.99" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={(quote[key] as number) * 100} onChange={(event) => updateQuote(key, numberValue(event.target.value) / 100)} /><span className="mt-1 block text-xs font-normal leading-relaxed text-on-surface-variant">{description}</span></label>)}</div>
+                </div>
+              </details>
+            </div>
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <button type="button" className="rounded-xl border border-outline-variant/30 bg-white px-4 py-2.5 text-sm font-bold text-on-surface transition hover:bg-surface-container-low" onClick={() => download("xlsx")}>Export Excel</button>
+              <button type="button" className="primary-gradient rounded-xl px-4 py-2.5 text-sm font-bold text-on-primary shadow-sm transition hover:brightness-105" onClick={() => download("pdf")}>Proposal PDF</button>
+            </div>
+          </section>
+
           <section className="min-w-0 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/15 px-5 py-5 sm:px-6">
               <div className="min-w-0">
@@ -1031,7 +1064,7 @@ export default function QuoteBuilder() {
               </div>
             </div>
 
-            <div className="space-y-4 bg-surface-container-low/50 p-3 sm:p-5">
+            <div className="space-y-3 bg-surface-container-low/50 p-3 sm:p-4">
               {quote.lines.map((line, index) => {
                 const row = totals.rows.find((item) => item.line === line);
                 const existingSuggestions = suggestionState?.lineIndex === index && suggestionState.field === "existing" ? suggestionState : null;
@@ -1098,7 +1131,7 @@ export default function QuoteBuilder() {
                   })),
                 ]);
                 const hasActiveAutocomplete = Boolean(existingSuggestions || proposedSuggestions);
-                return <article key={line.id} className={`relative ${hasActiveAutocomplete ? "z-20" : "z-0"} min-w-0 overflow-visible rounded-2xl border border-outline-variant/25 bg-white shadow-sm`}>
+                return <article key={line.id} className={`relative ${hasActiveAutocomplete ? "z-20" : "z-0"} min-w-0 overflow-visible rounded-xl border border-outline-variant/25 bg-white shadow-sm`}>
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/15 bg-surface-container-low/60 px-4 py-3 sm:px-5">
                     <div className="flex min-w-0 flex-wrap items-center gap-3">
                       <span className="rounded-full bg-on-surface/[0.06] px-3 py-1 text-xs font-bold text-on-surface">LINE {String(index + 1).padStart(2, "0")}</span>
@@ -1205,13 +1238,14 @@ export default function QuoteBuilder() {
                     </section>
                   </details>
 
-                  <div className="grid min-w-0 grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2">
-                    <section className="min-w-0 rounded-xl border border-sky-200 bg-sky-50/70 p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 p-3 sm:p-4 xl:grid-cols-2">
+                    <section className="grid min-w-0 content-start grid-cols-1 gap-3 rounded-xl border border-sky-200 bg-sky-50/70 p-4 xl:grid-cols-2 xl:gap-x-4">
+                      <div className="mb-1 flex items-center justify-between gap-3 xl:col-span-2">
                         <div><h3 className="text-sm font-bold text-sky-950">Existing fixture</h3><p className="mt-0.5 text-xs text-sky-900/75">What is installed now?</p></div>
                         <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-900">Existing</span>
                       </div>
-                      <div className={labelClass}>Existing fixture description
+                      <div className={`${labelClass} xl:col-span-2`}>
+                        Existing fixture description
                         <FixtureAutocomplete
                           value={line.existingDescription}
                           onChange={(value) => updateLine(index, "existingDescription", value)}
@@ -1224,7 +1258,7 @@ export default function QuoteBuilder() {
                           className={fieldClass}
                         />
                       </div>
-                      <label className={`${labelClass} mt-3`}>Existing fixture type
+                      <label className={labelClass}>Existing fixture type
                         <FixtureTypePicker
                           value={line.existingFixtureType}
                           onChange={(value) => updateLine(index, "existingFixtureType", value)}
@@ -1233,21 +1267,22 @@ export default function QuoteBuilder() {
                           className={fieldClass}
                         />
                       </label>
-                      <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-3 xl:col-span-2">
                         <label className={labelClass}>Existing input watts<input className={fieldClass} value={line.existingWatts} onChange={(event) => updateLine(index, "existingWatts", event.target.value)} placeholder="e.g. 190W" /></label>
                         <label className={labelClass}>Existing quantity<input type="number" min="0" className={fieldClass} value={line.existingQty || ""} onChange={(event) => updateLine(index, "existingQty", numberValue(event.target.value))} placeholder="0" /></label>
                       </div>
-                      {line.existingWattageReference && <p className="mt-2 text-xs text-on-surface-variant">Reference: {line.existingWattageReference}. Editing the description or watts clears this reference.</p>}
-                      <InputWattagePicker onSelect={(entry) => applyInputWattage(index, entry)} />
-                      <p className="mt-2 text-[11px] leading-relaxed text-sky-900/75">Start typing for common descriptions and matches from prior quotes. Custom descriptions are welcome.</p>
+                      {line.existingWattageReference && <p className="text-xs text-on-surface-variant xl:col-span-2">Reference: {line.existingWattageReference}. Editing the description or watts clears this reference.</p>}
+                      <div className="xl:col-span-2"><InputWattagePicker onSelect={(entry) => applyInputWattage(index, entry)} /></div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-sky-900/75 xl:col-span-2">Start typing for common descriptions and matches from prior quotes. Custom descriptions are welcome.</p>
                     </section>
 
-                    <section className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3">
+                    <section className="grid min-w-0 content-start grid-cols-1 gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 xl:grid-cols-2 xl:gap-x-4">
+                      <div className="mb-1 flex items-center justify-between gap-3 xl:col-span-2">
                         <div><h3 className="text-sm font-bold text-emerald-950">Proposed work</h3><p className="mt-0.5 text-xs text-emerald-900/75">What will be installed or performed?</p></div>
                         <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-900">Proposed</span>
                       </div>
-                      <div className={labelClass}>Proposed fixture / scope description
+                      <div className={`${labelClass} xl:col-span-2`}>
+                        Proposed fixture / scope description
                         <FixtureAutocomplete
                           value={line.proposedDescription}
                           onChange={(value) => updateLine(index, "proposedDescription", value)}
@@ -1260,7 +1295,7 @@ export default function QuoteBuilder() {
                           className={fieldClass}
                         />
                       </div>
-                      <label className={`${labelClass} mt-3`}>Proposed fixture type
+                      <label className={labelClass}>Proposed fixture type
                         <FixtureTypePicker
                           value={line.proposedFixtureType}
                           onChange={(value) => updateLine(index, "proposedFixtureType", value)}
@@ -1269,11 +1304,11 @@ export default function QuoteBuilder() {
                           className={fieldClass}
                         />
                       </label>
-                      <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-3 xl:col-span-2">
                         <label className={labelClass}>Proposed watts<input className={fieldClass} value={line.proposedWatts} onChange={(event) => updateLine(index, "proposedWatts", event.target.value)} placeholder="e.g. 40W" /></label>
                         <label className={labelClass}>Work quantity<input type="number" min="0" className={fieldClass} value={line.proposedQty || ""} onChange={(event) => updateLine(index, "proposedQty", numberValue(event.target.value))} placeholder="0" /></label>
                       </div>
-                      <details className="mt-4 rounded-lg border border-emerald-200/80 bg-white/70">
+                      <details className="rounded-lg border border-emerald-200/80 bg-white/70 xl:col-span-2">
                         <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-emerald-950 marker:text-emerald-800">Additional specifications and installation notes <span className="font-normal text-emerald-900/70">· Optional</span></summary>
                         <div className="space-y-3 border-t border-emerald-200/70 p-3">
                       <div className="grid grid-cols-2 gap-3">
@@ -1295,13 +1330,13 @@ export default function QuoteBuilder() {
                       </label>
                         </div>
                       </details>
-                      <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-3 xl:col-span-2">
                         <label className={labelClass}>Product unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.productCost || ""} onChange={(event) => updateLine(index, "productCost", numberValue(event.target.value))} placeholder="$0.00" /></label>
                         <label className={labelClass}>Labor unit cost<input type="number" min="0" step="0.01" className={fieldClass} value={line.laborCost || ""} onChange={(event) => updateLine(index, "laborCost", numberValue(event.target.value))} placeholder="$0.00" /></label>
                       </div>
 
-                      {line.productCostSource && <p className="mt-2 text-[11px] text-emerald-950">{line.productCostSource === "warehouse_quote" ? `Warehouse quote: ${line.productCostVendor || "vendor not recorded"}${line.productCostQuotedAt ? ` · ${new Date(line.productCostQuotedAt).toLocaleDateString()}` : ""}` : `Prior proposal cost · used ${line.productCostPriorUseCount} time(s)`}</p>}
-                      {lineAI.map((item) => <div key={`${item.lineIndex}-${item.confidence}`} className="mt-3 rounded-xl border border-primary/20 bg-white p-3">
+                      {line.productCostSource && <p className="mt-2 text-[11px] text-emerald-950 xl:col-span-2">{line.productCostSource === "warehouse_quote" ? `Warehouse quote: ${line.productCostVendor || "vendor not recorded"}${line.productCostQuotedAt ? ` · ${new Date(line.productCostQuotedAt).toLocaleDateString()}` : ""}` : `Prior proposal cost · used ${line.productCostPriorUseCount} time(s)`}</p>}
+                      {lineAI.map((item) => <div key={`${item.lineIndex}-${item.confidence}`} className="mt-3 rounded-xl border border-primary/20 bg-white p-3 xl:col-span-2">
                         {item.candidate ? <>
                           <p className="text-[10px] font-bold uppercase tracking-wide text-primary">AI match · {item.confidence} confidence</p>
                           <p className="mt-1 break-words text-sm font-semibold">{item.candidate.description}</p>
@@ -1313,33 +1348,16 @@ export default function QuoteBuilder() {
                       </div>)}
                     </section>
                   </div>
+                  <div className="grid gap-2 border-t border-outline-variant/15 bg-surface-container-low/40 px-4 py-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
+                    <p className="text-on-surface-variant">Existing load <strong className="text-on-surface">{line.existingQty} × {line.existingWatts || "—"}{line.existingFixtureType ? ` · ${line.existingFixtureType}` : ""}</strong></p>
+                    <p className="text-on-surface-variant">Proposed load <strong className="text-on-surface">{line.proposedQty} × {line.proposedWatts || "—"}{line.proposedFixtureType ? ` · ${line.proposedFixtureType}` : ""}</strong></p>
+                    <p className="text-on-surface-variant">Product / labor sell <strong className="text-on-surface">{money(row?.productSell ?? 0)} / {money(row?.laborSell ?? 0)}</strong></p>
+                    <p className="text-on-surface-variant">Line total <strong className="text-primary">{money(row?.sellTotal ?? 0)}</strong></p>
+                  </div>
                 </article>;
               })}
             </div>
           </section>
-
-          <aside className="rounded-2xl border border-outline-variant/20 bg-white p-5 shadow-sm xl:sticky xl:top-6">
-            <h2 className="mb-4 font-headline text-lg font-bold">Quote summary</h2>
-            <div className="rounded-xl bg-primary p-4 text-on-primary">
-              <span className="text-xs font-semibold uppercase tracking-wide text-on-primary/75">Sell total</span>
-              <strong className="mt-1 block font-headline text-3xl">{money(totals.sellTotal)}</strong>
-            </div>
-            <div className="mt-4 space-y-3 text-sm"><div className="flex justify-between"><span className="text-on-surface-variant">Direct cost</span><strong>{money(totals.directCost)}</strong></div><div className="flex justify-between"><span className="text-on-surface-variant">Contingency</span><strong>{money(totals.contingency)}</strong></div><div className="flex justify-between border-t border-outline-variant/15 pt-3"><span className="font-semibold">Estimated profit</span><span className="font-semibold">{money(totals.profit)} ({(totals.margin * 100).toFixed(1)}%)</span></div></div>
-            <div className="mt-4 space-y-2 border-t border-outline-variant/15 pt-3">
-              <details className="rounded-lg border border-outline-variant/20">
-                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Project costs <span className="text-xs font-normal text-on-surface-variant">· Optional</span></summary>
-                <div className="space-y-3 border-t border-outline-variant/15 p-3 text-sm">{([["shipping", "Shipping"], ["travel", "Travel"], ["miscellaneous", "Miscellaneous"]] as const).map(([key, label]) => <label key={key} className="block font-semibold">{label}<input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={quote[key] || ""} onChange={(event) => updateQuote(key, numberValue(event.target.value))} /> </label>)}</div>
-              </details>
-              <details className="rounded-lg border border-outline-variant/20">
-                <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">Formula settings <span className="text-xs font-normal text-on-surface-variant">· Advanced</span></summary>
-                <div className="border-t border-outline-variant/15 p-3">
-                  <div className="flex items-start justify-between gap-3"><p className="text-xs leading-relaxed text-on-surface-variant">Business rules used to calculate quote totals and exports.</p><button type="button" className="shrink-0 text-xs font-bold text-primary hover:underline" onClick={resetFormulaSettings}>Reset</button></div>
-                  <div className="mt-4 space-y-4">{formulaFields.map(({ key, label, description, suffix }) => <label key={key} className="block text-sm font-semibold">{label}<span className="ml-1 text-on-surface-variant">({suffix})</span><input type="number" min="0" max="99.99" step="0.01" className="mt-1 w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-normal" value={(quote[key] as number) * 100} onChange={(event) => updateQuote(key, numberValue(event.target.value) / 100)} /><span className="mt-1 block text-xs font-normal leading-relaxed text-on-surface-variant">{description}</span></label>)}</div>
-                </div>
-              </details>
-            </div>
-            <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" className="rounded-xl border border-outline-variant/30 bg-white px-3 py-3 text-sm font-bold text-on-surface transition hover:bg-surface-container-low" onClick={() => download("xlsx")}>Excel</button><button type="button" className="primary-gradient rounded-xl px-3 py-3 text-sm font-bold text-on-primary shadow-sm transition hover:brightness-105" onClick={() => download("pdf")}>Proposal PDF</button></div>
-          </aside>
         </div>}
 
                       {activeTab === "energy" && <section role="tabpanel" aria-label="Energy savings analysis" className="space-y-6 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest p-5 sm:p-7">
