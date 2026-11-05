@@ -33,6 +33,46 @@ export const fixtureTypes = [
   "Other / custom",
 ] as const;
 
+const fixtureDescriptionTypePatterns: Array<[RegExp, (description: string) => string]> = [
+  [/\b2\s*[x×]\s*2\b/, () => "2x2 troffer"],
+  [/\b2\s*[x×]\s*4\b/, () => "2x4 troffer"],
+  [/\b1\s*[x×]\s*4\b/, () => "1x4 troffer"],
+  [/\bflat\s*panel\b|\bpanel\s*light\b/, () => "Flat panel"],
+  [/\bhigh[\s-]*bay\b/, () => "High bay"],
+  [/\blow[\s-]*bay\b/, () => "Low bay"],
+  [/\b(troffer|lay[\s-]*in)\b/, () => "2x4 troffer"],
+  [/\b(strip|linear)\b/, () => "Linear strip"],
+  [/\bwrap[\s-]*around\b/, () => "Wraparound"],
+  [/\b(downlight|recessed|can light)\b/, () => "Downlight / recessed can"],
+  [/\btrack\b/, () => "Track light"],
+  [/\bsconce\b/, () => "Wall sconce"],
+  [/\bvanity\b/, () => "Vanity light"],
+  [/\bunder[\s-]*cabinet\b/, () => "Undercabinet"],
+  [/\b(area light|pole light)\b/, () => "Area / pole light"],
+  [/\b(flood|security light)\b/, () => "Flood / security light"],
+  [/\bwall[\s-]*pack\b/, () => "Wall pack"],
+  [/\b(canopy|garage)\b/, () => "Canopy / garage"],
+  [/\b(bollard|pathway)\b/, () => "Bollard / pathway"],
+  [/\blandscape\b/, () => "Landscape"],
+  [/\b(roadway|streetlight|street light)\b/, () => "Roadway / street"],
+  [/\bparking garage\b/, () => "Parking garage"],
+  [/\bsports lighting\b/, () => "Sports lighting"],
+  [/\btunnel\b/, () => "Tunnel"],
+  [/\bhazardous\b/, () => "Hazardous location"],
+  [/\bvaportight\b/, () => "Vaportight"],
+  [/\b(pool|spa)\b/, () => "Pool / spa"],
+  [/\bexit sign\b/, () => "Exit sign"],
+  [/\bemergency\b/, () => "Emergency lighting"],
+  [/\bsign\b/, () => "Sign lighting"],
+  [/\b(lamp|retrofit|retrofit kit)\b/, () => "Lamp / retrofit kit"],
+  [/\bmultifamily\b/, () => "Multifamily"],
+];
+
+export function inferFixtureType(description: string) {
+  const normalized = description.toLocaleLowerCase().replace(/[_/]+/g, " ");
+  return fixtureDescriptionTypePatterns.find(([pattern]) => pattern.test(normalized))?.[1](description) ?? "";
+}
+
 const fixtureTypeFamilies: Record<string, string> = {
   "2x2 troffer": "troffer",
   "2x4 troffer": "troffer",

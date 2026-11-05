@@ -11,7 +11,7 @@ import InputWattagePicker from "@/components/InputWattagePicker";
 import { wattageReference, type InputWattageEntry } from "@/lib/input-wattage";
 import { calculateEnergySavings, calculateQuote, emptyLine, emptyQuote, money, type Quote, type QuoteLine } from "@/lib/quote";
 import { conditionIdentifiers, describeCondition, describeWorkCodes, workIdentifiers, type WorkCode } from "@/lib/quote-identifiers";
-import { colorTemperatureOptions, controlOptions, dimmingOptions, fixtureTypes, lightDistributions, lightingTechnologies, matchesFixtureCategory, matchFixtureDescriptionExamples, mountingTypes, relatedFixtureTypes, voltageOptions } from "@/lib/quote-fixture-options";
+import { colorTemperatureOptions, controlOptions, dimmingOptions, fixtureTypes, inferFixtureType, lightDistributions, lightingTechnologies, matchesFixtureCategory, matchFixtureDescriptionExamples, mountingTypes, relatedFixtureTypes, voltageOptions } from "@/lib/quote-fixture-options";
 import type { WarehouseQuoteSuggestion } from "@/lib/warehouse-quote-suggestions";
 import type { WorkbookPhoto } from "@/lib/quote-workbook-import";
 
@@ -654,6 +654,10 @@ export default function QuoteBuilder() {
       lines: current.lines.map((line, lineIndex) => {
         if (lineIndex !== index) return line;
         const updated = { ...line, [key]: value };
+        if (key === "existingDescription") {
+          const inferredType = inferFixtureType(String(value));
+          if (inferredType) updated.existingFixtureType = inferredType;
+        }
         if (key === "existingWatts" || key === "existingDescription") {
           updated.existingWattageReference = "";
         }
@@ -676,6 +680,7 @@ export default function QuoteBuilder() {
       lines: current.lines.map((line, lineIndex) => lineIndex === index ? {
         ...line,
         existingDescription: entry.description,
+        existingFixtureType: line.existingFixtureType || inferFixtureType(entry.description),
         existingWatts: `${entry.watts}W`,
         existingWattageReference: wattageReference(entry),
       } : line),
@@ -821,6 +826,19 @@ export default function QuoteBuilder() {
             ...current,
             [key]: { query: normalized, result, loading: false },
           }));
+          const exactFixture = (result as SuggestionResponse).existingFixtures.find((fixture) =>
+            fixture.description.trim().toLocaleLowerCase() === normalized.toLocaleLowerCase() && fixture.fixtureType,
+          );
+          if (field === "existing" && exactFixture) {
+            setQuote((current) => ({
+              ...current,
+              lines: current.lines.map((line) => line.id === lineId
+                && line.existingDescription.trim().toLocaleLowerCase() === normalized.toLocaleLowerCase()
+                && !line.existingFixtureType
+                ? { ...line, existingFixtureType: exactFixture.fixtureType ?? "" }
+                : line),
+            }));
+          }
         }
       } catch (error) {
         if (controller.signal.aborted || suggestionRequests.current.get(key) !== requestId) return;
@@ -868,7 +886,7 @@ export default function QuoteBuilder() {
         ...line,
         existingDescription: suggestion.description,
         existingWatts: line.existingWatts || suggestion.watts,
-        existingFixtureType: line.existingFixtureType || suggestion.fixtureType || "",
+        existingFixtureType: line.existingFixtureType || suggestion.fixtureType || inferFixtureType(suggestion.description),
         existingWattageReference: "",
       } : line),
     }));

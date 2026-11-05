@@ -6,7 +6,7 @@ import * as XLSX from "xlsx";
 
 import { inputWattageEntries, searchInputWattage, wattageReference } from "@/lib/input-wattage";
 import { calculateEnergySavings, calculateQuote, emptyLine, emptyQuote } from "@/lib/quote";
-import { fixtureDescriptionExamples, fixtureTypes, matchesFixtureCategory, matchFixtureDescriptionExamples, relatedFixtureTypes } from "@/lib/quote-fixture-options";
+import { fixtureDescriptionExamples, fixtureTypes, inferFixtureType, matchesFixtureCategory, matchFixtureDescriptionExamples, relatedFixtureTypes } from "@/lib/quote-fixture-options";
 import { conditionIdentifiers, parseConditionCode, parseWorkCodes, workIdentifiers } from "@/lib/quote-identifiers";
 import { createQuoteWorkbook } from "@/lib/quote-workbook";
 import { parseQuoteWorkbook } from "@/lib/quote-workbook-import";
@@ -39,6 +39,13 @@ test("fixture categories narrow proposed types and suggestions to matching fixtu
   assert.ok(matchesFixtureCategory("LED high-bay fixture", "High bay"));
   assert.ok(matchesFixtureCategory("LED fixture replacement product", "2x4 troffer"));
   assert.equal(relatedFixtureTypes("Custom existing fixture").length, fixtureTypes.length);
+});
+
+test("existing fixture descriptions infer a matching fixture type when recognizable", () => {
+  assert.equal(inferFixtureType("Existing 2x2 LED troffer"), "2x2 troffer");
+  assert.equal(inferFixtureType("Metal halide high-bay"), "High bay");
+  assert.equal(inferFixtureType("Recessed LED downlight"), "Downlight / recessed can");
+  assert.equal(inferFixtureType("Legacy fixture, unknown type"), "");
 });
 
 test("the PNG identifiers stay distinct and reject unknown codes", () => {
