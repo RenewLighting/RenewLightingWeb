@@ -101,7 +101,8 @@ export function relatedFixtureTypes(category: string) {
 
 export function matchesFixtureCategory(candidate: string, category: string) {
   const family = fixtureCategoryFamily(category);
-  return !family || fixtureCategoryFamily(candidate) === family;
+  const candidateFamily = fixtureCategoryFamily(candidate);
+  return !family || !candidateFamily || candidateFamily === family;
 }
 
 export const fixtureDescriptionExamples = [

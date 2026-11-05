@@ -1261,6 +1261,40 @@ export default function QuoteBuilder() {
                           className={fieldClass}
                         />
                       </div>
+                      {existingSuggestions?.result && <div className="rounded-lg border border-emerald-200/80 bg-white/80 p-3 xl:col-span-2">
+                        <h4 className="text-xs font-bold text-emerald-950">Replacement suggestions for the existing fixture</h4>
+                        {existingSuggestions.result.history.length > 0
+                          ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {existingSuggestions.result.history.slice(0, 4).map((suggestion, suggestionIndex) => <button
+                              key={`${suggestion.description}-${suggestionIndex}`}
+                              type="button"
+                              className="rounded-lg border border-outline-variant/20 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/[0.04]"
+                              onClick={() => applyHistorySuggestion(index, suggestion)}
+                            >
+                              <span className="block break-words text-xs font-semibold text-on-surface">{suggestion.description}</span>
+                              <span className="mt-1 block text-[11px] text-on-surface-variant">
+                                {[suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`, suggestion.latestCost !== null && suggestion.latestCost > 0 ? `${money(suggestion.latestCost)} recorded unit cost` : ""].filter(Boolean).join(" · ")}
+                              </span>
+                            </button>)}
+                          </div>
+                          : <p className="mt-1 text-[11px] text-on-surface-variant">No prior proposal matches found. You can continue entering a proposed fixture manually.</p>}
+                        {existingSuggestions.result.warehouse.filter((suggestion) => isMatchingFixture([suggestion.category, suggestion.name, suggestion.model_number].filter(Boolean).join(" "))).length > 0 && <>
+                          <h5 className="mt-3 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Warehouse matches</h5>
+                          <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                            {existingSuggestions.result.warehouse.filter((suggestion) => isMatchingFixture([suggestion.category, suggestion.name, suggestion.model_number].filter(Boolean).join(" "))).slice(0, 4).map((suggestion) => <button
+                              key={suggestion.id}
+                              type="button"
+                              className="rounded-lg border border-outline-variant/20 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/[0.04]"
+                              onClick={() => applyWarehouseSuggestion(index, suggestion)}
+                            >
+                              <span className="block break-words text-xs font-semibold text-on-surface">{suggestion.name}{suggestion.model_number ? ` · ${suggestion.model_number}` : ""}</span>
+                              <span className="mt-1 block text-[11px] text-on-surface-variant">
+                                {[suggestion.brand, suggestion.category, suggestion.latest_price !== null && suggestion.latest_currency === "USD" ? `${money(suggestion.latest_price)} latest USD quote` : ""].filter(Boolean).join(" · ")}
+                              </span>
+                            </button>)}
+                          </div>
+                        </>}
+                      </div>}
                       <label className={labelClass}>Proposed fixture type
                         <FixtureTypePicker
                           value={line.proposedFixtureType}

@@ -37,6 +37,7 @@ test("fixture categories narrow proposed types and suggestions to matching fixtu
   assert.ok(matchesFixtureCategory("LED flat panel", "2x4 troffer"));
   assert.ok(!matchesFixtureCategory("LED high-bay fixture", "2x4 troffer"));
   assert.ok(matchesFixtureCategory("LED high-bay fixture", "High bay"));
+  assert.ok(matchesFixtureCategory("LED fixture replacement product", "2x4 troffer"));
   assert.equal(relatedFixtureTypes("Custom existing fixture").length, fixtureTypes.length);
 });
 
