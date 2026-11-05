@@ -80,6 +80,12 @@ type SuggestionResponse = {
   warehouseAvailable: boolean;
 };
 
+type SuggestionState = {
+  query: string;
+  result: SuggestionResponse | null;
+  loading: boolean;
+};
+
 type AICandidate = {
   id: string;
   kind: "history" | "warehouse";
@@ -315,12 +321,12 @@ export default function QuoteBuilder() {
   const [aiBusy, setAiBusy] = useState(false);
   const [uploadingLineId, setUploadingLineId] = useState<string | null>(null);
   const [aiRecommendations, setAiRecommendations] = useState<AIRecommendation[]>([]);
-  const [suggestionState, setSuggestionState] = useState<{ lineIndex: number; field: "existing" | "proposed"; query: string; result: SuggestionResponse | null; loading: boolean } | null>(null);
+  const [suggestionStates, setSuggestionStates] = useState<Record<string, SuggestionState>>({});
   const persistedPhotoIds = useRef<string[]>([]);
   const uploadedPhotoIds = useRef<string[]>([]);
-  const suggestionRequest = useRef(0);
-  const suggestionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suggestionController = useRef<AbortController | null>(null);
+  const suggestionRequests = useRef(new Map<string, number>());
+  const suggestionTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const suggestionControllers = useRef(new Map<string, AbortController>());
   const importInput = useRef<HTMLInputElement>(null);
   const importFile = useRef<File | null>(null);
   const importPhotos = useRef<WorkbookPhoto[]>([]);
@@ -329,10 +335,12 @@ export default function QuoteBuilder() {
   const importQuoteTotals = importPreview?.quote ? calculateQuote(importPreview.quote) : null;
 
   function clearSuggestionSearch() {
-    suggestionRequest.current += 1;
-    if (suggestionTimer.current) clearTimeout(suggestionTimer.current);
-    suggestionController.current?.abort();
-    setSuggestionState(null);
+    suggestionTimers.current.forEach((timer) => clearTimeout(timer));
+    suggestionControllers.current.forEach((controller) => controller.abort());
+    suggestionTimers.current.clear();
+    suggestionControllers.current.clear();
+    suggestionRequests.current.clear();
+    setSuggestionStates({});
   }
 
   function resetImportPreview() {
@@ -672,7 +680,8 @@ export default function QuoteBuilder() {
         existingWattageReference: wattageReference(entry),
       } : line),
     }));
-    searchSuggestions(index, "existing", entry.description);
+    const lineId = quote.lines[index]?.id;
+    if (lineId) searchSuggestions(lineId, "existing", entry.description);
   }
 
   function toggleWorkCode(index: number, code: WorkCode) {
@@ -777,33 +786,56 @@ export default function QuoteBuilder() {
       : "New quote started, but one or more unsaved photos could not be deleted.");
   }
 
-  function searchSuggestions(lineIndex: number, field: "existing" | "proposed", query: string) {
-    const requestId = ++suggestionRequest.current;
-    if (suggestionTimer.current) clearTimeout(suggestionTimer.current);
-    suggestionController.current?.abort();
+  function searchSuggestions(lineId: string, field: "existing" | "proposed", query: string) {
+    const key = `${lineId}:${field}`;
+    const requestId = (suggestionRequests.current.get(key) ?? 0) + 1;
+    suggestionRequests.current.set(key, requestId);
+    const previousTimer = suggestionTimers.current.get(key);
+    if (previousTimer) clearTimeout(previousTimer);
+    suggestionControllers.current.get(key)?.abort();
     const normalized = query.trim();
     if (normalized.length < 3) {
-      setSuggestionState({ lineIndex, field, query: normalized, result: null, loading: false });
+      suggestionControllers.current.delete(key);
+      suggestionTimers.current.delete(key);
+      setSuggestionStates((current) => ({
+        ...current,
+        [key]: { query: normalized, result: null, loading: false },
+      }));
       return;
     }
 
-    setSuggestionState({ lineIndex, field, query: normalized, result: null, loading: true });
-    suggestionTimer.current = setTimeout(async () => {
+    setSuggestionStates((current) => ({
+      ...current,
+      [key]: { query: normalized, result: null, loading: true },
+    }));
+    const timer = setTimeout(async () => {
+      suggestionTimers.current.delete(key);
       const controller = new AbortController();
-      suggestionController.current = controller;
+      suggestionControllers.current.set(key, controller);
       try {
         const response = await fetch(`/api/quote/suggestions?q=${encodeURIComponent(normalized)}`, { signal: controller.signal, cache: "no-store" });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Quote suggestions are unavailable.");
-        if (requestId === suggestionRequest.current) {
-          setSuggestionState({ lineIndex, field, query: normalized, result, loading: false });
+        if (suggestionRequests.current.get(key) === requestId) {
+          setSuggestionStates((current) => ({
+            ...current,
+            [key]: { query: normalized, result, loading: false },
+          }));
         }
       } catch (error) {
-        if (controller.signal.aborted || requestId !== suggestionRequest.current) return;
-        setSuggestionState({ lineIndex, field, query: normalized, result: null, loading: false });
+        if (controller.signal.aborted || suggestionRequests.current.get(key) !== requestId) return;
+        setSuggestionStates((current) => ({
+          ...current,
+          [key]: { query: normalized, result: null, loading: false },
+        }));
         setStorageStatus(error instanceof Error ? error.message : "Quote suggestions are unavailable.");
+      } finally {
+        if (suggestionControllers.current.get(key) === controller) {
+          suggestionControllers.current.delete(key);
+        }
       }
     }, 250);
+    suggestionTimers.current.set(key, timer);
   }
 
   function applyHistorySuggestion(lineIndex: number, suggestion: HistoricalSuggestion) {
@@ -840,6 +872,8 @@ export default function QuoteBuilder() {
         existingWattageReference: "",
       } : line),
     }));
+    const lineId = quote.lines[lineIndex]?.id;
+    if (lineId) searchSuggestions(lineId, "existing", suggestion.description);
   }
 
   function applyWarehouseSuggestion(lineIndex: number, suggestion: WarehouseQuoteSuggestion) {
@@ -1031,8 +1065,8 @@ export default function QuoteBuilder() {
             <div className="space-y-3 bg-surface-container-low/50 p-3 sm:p-4">
               {quote.lines.map((line, index) => {
                 const row = totals.rows.find((item) => item.line === line);
-                const existingSuggestions = suggestionState?.lineIndex === index && suggestionState.field === "existing" ? suggestionState : null;
-                const proposedSuggestions = suggestionState?.lineIndex === index && suggestionState.field === "proposed" ? suggestionState : null;
+                const existingSuggestions = suggestionStates[`${line.id}:existing`];
+                const proposedSuggestions = suggestionStates[`${line.id}:proposed`];
                 const lineAI = aiRecommendations.filter((item) => item.lineIndex === index);
                 const lineNeedsDetails = !line.proposedDescription.trim() || line.proposedQty <= 0;
                 const proposedFixtureTypeOptions = relatedFixtureTypes(line.existingFixtureType);
@@ -1047,6 +1081,7 @@ export default function QuoteBuilder() {
                     onSelect: () => {
                       updateLine(index, "existingDescription", description);
                       clearSuggestionSearch();
+                      searchSuggestions(line.id, "existing", description);
                     },
                   })),
                   ...(existingSuggestions?.result?.existingFixtures ?? []).map((suggestion) => ({
@@ -1055,20 +1090,6 @@ export default function QuoteBuilder() {
                     label: suggestion.description,
                     detail: [suggestion.fixtureType, suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`].filter(Boolean).join(" · "),
                     onSelect: () => applyExistingFixtureSuggestion(index, suggestion),
-                  })),
-                  ...(existingSuggestions?.result?.history ?? []).map((suggestion) => ({
-                    id: `existing-replacement-${suggestion.description}`,
-                    group: "Suggested replacements from prior quotes",
-                    label: suggestion.description,
-                    detail: [suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`].filter(Boolean).join(" · "),
-                    onSelect: () => applyHistorySuggestion(index, suggestion),
-                  })),
-                  ...(existingSuggestions?.result?.warehouse ?? []).map((suggestion) => ({
-                    id: `existing-warehouse-${suggestion.id}`,
-                    group: "Warehouse replacement products",
-                    label: [suggestion.name, suggestion.model_number].filter(Boolean).join(" · "),
-                    detail: [suggestion.brand, suggestion.category].filter(Boolean).join(" · "),
-                    onSelect: () => applyWarehouseSuggestion(index, suggestion),
                   })),
                 ]);
                 const proposedAutocompleteOptions = uniqueFixtureAutocompleteOptions([
@@ -1215,7 +1236,7 @@ export default function QuoteBuilder() {
                         <FixtureAutocomplete
                           value={line.existingDescription}
                           onChange={(value) => updateLine(index, "existingDescription", value)}
-                          onSearch={(query) => searchSuggestions(index, "existing", query)}
+                          onSearch={(query) => searchSuggestions(line.id, "existing", query)}
                           label={`Existing fixture description, line ${index + 1}`}
                           options={existingAutocompleteOptions}
                           loading={existingSuggestions?.loading ?? false}
@@ -1252,7 +1273,7 @@ export default function QuoteBuilder() {
                         <FixtureAutocomplete
                           value={line.proposedDescription}
                           onChange={(value) => updateLine(index, "proposedDescription", value)}
-                          onSearch={(query) => searchSuggestions(index, "proposed", query)}
+                          onSearch={(query) => searchSuggestions(line.id, "proposed", query)}
                           label={`Proposed fixture or scope description, line ${index + 1}`}
                           options={proposedAutocompleteOptions}
                           loading={proposedSuggestions?.loading ?? false}
@@ -1261,39 +1282,45 @@ export default function QuoteBuilder() {
                           className={fieldClass}
                         />
                       </div>
-                      {existingSuggestions?.result && <div className="rounded-lg border border-emerald-200/80 bg-white/80 p-3 xl:col-span-2">
-                        <h4 className="text-xs font-bold text-emerald-950">Replacement suggestions for the existing fixture</h4>
-                        {existingSuggestions.result.history.length > 0
-                          ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                            {existingSuggestions.result.history.slice(0, 4).map((suggestion, suggestionIndex) => <button
-                              key={`${suggestion.description}-${suggestionIndex}`}
-                              type="button"
-                              className="rounded-lg border border-outline-variant/20 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/[0.04]"
-                              onClick={() => applyHistorySuggestion(index, suggestion)}
-                            >
-                              <span className="block break-words text-xs font-semibold text-on-surface">{suggestion.description}</span>
-                              <span className="mt-1 block text-[11px] text-on-surface-variant">
-                                {[suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`, suggestion.latestCost !== null && suggestion.latestCost > 0 ? `${money(suggestion.latestCost)} recorded unit cost` : ""].filter(Boolean).join(" · ")}
-                              </span>
-                            </button>)}
-                          </div>
-                          : <p className="mt-1 text-[11px] text-on-surface-variant">No prior proposal matches found. You can continue entering a proposed fixture manually.</p>}
-                        {existingSuggestions.result.warehouse.filter((suggestion) => isMatchingFixture([suggestion.category, suggestion.name, suggestion.model_number].filter(Boolean).join(" "))).length > 0 && <>
-                          <h5 className="mt-3 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Warehouse matches</h5>
-                          <div className="mt-1 grid gap-2 sm:grid-cols-2">
-                            {existingSuggestions.result.warehouse.filter((suggestion) => isMatchingFixture([suggestion.category, suggestion.name, suggestion.model_number].filter(Boolean).join(" "))).slice(0, 4).map((suggestion) => <button
-                              key={suggestion.id}
-                              type="button"
-                              className="rounded-lg border border-outline-variant/20 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/[0.04]"
-                              onClick={() => applyWarehouseSuggestion(index, suggestion)}
-                            >
-                              <span className="block break-words text-xs font-semibold text-on-surface">{suggestion.name}{suggestion.model_number ? ` · ${suggestion.model_number}` : ""}</span>
-                              <span className="mt-1 block text-[11px] text-on-surface-variant">
-                                {[suggestion.brand, suggestion.category, suggestion.latest_price !== null && suggestion.latest_currency === "USD" ? `${money(suggestion.latest_price)} latest USD quote` : ""].filter(Boolean).join(" · ")}
-                              </span>
-                            </button>)}
-                          </div>
-                        </>}
+                      <p className="text-[11px] leading-relaxed text-emerald-900/75 xl:col-span-2">Proposed autocomplete searches only what you type here. Replacement options based on the existing fixture are separate below.</p>
+                      {(existingSuggestions?.loading || existingSuggestions?.result) && <div className="rounded-lg border border-emerald-200/80 bg-white/80 p-3 xl:col-span-2">
+                          <h4 className="text-xs font-bold text-emerald-950">Suggested replacements for this existing fixture</h4>
+                          <p className="mt-1 text-[11px] text-on-surface-variant">Suggestions appear from your existing fixture description. Choose one to fill the proposed fixture, or continue entering it manually.</p>
+                          {existingSuggestions.loading && <p className="mt-2 text-xs text-on-surface-variant">Searching prior quotes and Warehouse products…</p>}
+                          {existingSuggestions.result && <>
+                          {existingSuggestions.result.history.length > 0
+                            ? <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {existingSuggestions.result.history.slice(0, 4).map((suggestion, suggestionIndex) => <button
+                                key={`${suggestion.description}-${suggestionIndex}`}
+                                type="button"
+                                className="rounded-lg border border-outline-variant/20 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/[0.04]"
+                                onClick={() => applyHistorySuggestion(index, suggestion)}
+                              >
+                                <span className="block break-words text-xs font-semibold text-on-surface">{suggestion.description}</span>
+                                <span className="mt-1 block text-[11px] text-on-surface-variant">
+                                  {[suggestion.watts, `${suggestion.priorUseCount} prior use${suggestion.priorUseCount === 1 ? "" : "s"}`, suggestion.latestCost !== null && suggestion.latestCost > 0 ? `${money(suggestion.latestCost)} recorded unit cost` : ""].filter(Boolean).join(" · ")}
+                                </span>
+                              </button>)}
+                            </div>
+                            : <p className="mt-2 text-[11px] text-on-surface-variant">No prior proposal matches found for this existing fixture.</p>}
+                          {existingSuggestions.result.warehouseAvailable === false && <p className="mt-2 text-[11px] text-on-surface-variant">Warehouse products are temporarily unavailable; prior quote matches are still shown.</p>}
+                          {existingSuggestions.result.warehouse.filter((suggestion) => isMatchingFixture([suggestion.category, suggestion.name, suggestion.model_number].filter(Boolean).join(" "))).length > 0 && <>
+                            <h5 className="mt-3 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Warehouse replacement products</h5>
+                            <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                              {existingSuggestions.result.warehouse.filter((suggestion) => isMatchingFixture([suggestion.category, suggestion.name, suggestion.model_number].filter(Boolean).join(" "))).slice(0, 4).map((suggestion) => <button
+                                key={suggestion.id}
+                                type="button"
+                                className="rounded-lg border border-outline-variant/20 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-primary/[0.04]"
+                                onClick={() => applyWarehouseSuggestion(index, suggestion)}
+                              >
+                                <span className="block break-words text-xs font-semibold text-on-surface">{suggestion.name}{suggestion.model_number ? ` · ${suggestion.model_number}` : ""}</span>
+                                <span className="mt-1 block text-[11px] text-on-surface-variant">
+                                  {[suggestion.brand, suggestion.category, suggestion.latest_price !== null && suggestion.latest_currency === "USD" ? `${money(suggestion.latest_price)} latest USD quote` : ""].filter(Boolean).join(" · ")}
+                                </span>
+                              </button>)}
+                            </div>
+                          </>}
+                          </>}
                       </div>}
                       <label className={labelClass}>Proposed fixture type
                         <FixtureTypePicker
